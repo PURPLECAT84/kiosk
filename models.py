@@ -1,11 +1,13 @@
 from sqlalchemy import Integer, String
 from database import Base
 from sqlalchemy.orm import Mapped, mapped_column
+import uuid
+from sqlalchemy.types import Uuid #<- 테이블에 저장 될 UUID 라는 타입 선언
 
 
 class User(Base):
     __tablename__ = "user_info"
-    id : Mapped[int] = mapped_column(primary_key = True, index = True)
+    id : Mapped[uuid.UUID] = mapped_column(primary_key = True, index = True, default = uuid.uuid4, index = True)
     email : Mapped[str] = mapped_column(nullable = False, unique = True) #중복불가, 고유갑 입력 설정
     name : Mapped[str] = mapped_column(String(30), nullable = False) #문자길이 정의가 필요 없다면 데이터 형식 뒷부분 생략 가능
     phone : Mapped[str] = mapped_column(String(20), nullable = False)
