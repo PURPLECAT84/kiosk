@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
-DB_URL = "postgresql://postgres.wmrnknlikvcohczmyvpb:HwIpn08gBh9gi8@aws-1-ap-south-1.pooler.supabase.com:6543/postgres"
+DB_URL = "postgresql://postgres.wmrnknlikvcohczmyvpb:PGHwIpn08gBh9gi8@aws-1-ap-south-1.pooler.supabase.com:6543/postgres"
 # supabase 비번 : PGHwIpn08gBh9gi8
 
 engine = create_engine(DB_URL, pool_pre_ping = True)
@@ -17,4 +17,11 @@ autoflush <- 자동 명령 전송 끄기, 불필요한 DB 전송 및 액션 감�
 
 class Base(DeclarativeBase):
     pass
-#get_db 는 추후 main.py 에서 작성
+
+
+def get_db():
+    db = DB_session()
+    try:
+        yield db
+    finally:
+        db.close()
