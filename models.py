@@ -17,18 +17,22 @@ class User(Base):
     authority : Mapped[str] = mapped_column(String(20), nullable = False, default = "manager") #기본값 설정
     joined_date : Mapped[datetime] = mapped_column(DateTime, nullable = False, default = datetime.now)
 
+    store_authority_join = relationship("Store", back_populates = "ownership")
+
 """ sqlalchemy 2.0 방식, 자동완성기능과 검증 측면에서 우수, But 기존 대비 코드가 복잡함"""
 
 class Store(Base):
     __tablename__ = "store_info"
-    id : Mapped[uuid.UUID] = mapped_column(primary_key = True, default = uuid.uuid4, index = True)
+    id : Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4, index=True)
+    user_id : Mapped[uuid.UUID] = mapped_column(ForeignKey("user_info.id"), nullable = False)
     type : Mapped[str] = mapped_column(String, nullable = False) 
     name : Mapped[str] = mapped_column(String(30), nullable = False, unique = True)
     address : Mapped[str] = mapped_column(String, nullable = False)
     created_date : Mapped[datetime] = mapped_column(DateTime, nullable = False, default = datetime.now)
+   
+    shelves = relationship("Shelve", back_populates = "store")
 
-    shelves = relationship("Shelve", back_populates = "store") 
-
+    ownership = relationship("User", back_populates="store_authority_join")
 
 
 class Shelve(Base):

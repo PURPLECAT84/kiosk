@@ -51,6 +51,8 @@ class StoreCreate(BaseModel):
     name : str
     address : str
     type : str | None = None
+    user_id : uuid.UUID
+
 
 
 class StoreUpdate(BaseModel):

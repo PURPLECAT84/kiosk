@@ -16,8 +16,8 @@ def verify_password(original_password : str, hashed_password : str) -> bool:
 
 """=====================여기서 부터 토큰 코드(JWT)============================"""
 
-SECRET_KEY = "User_Authority_Key"
-ALGORITHM = "HS256" # 암호화 알고리즘
+SECRET_KEY = "User_Authority_Key" #<-토큰 확인용 랜덤키 "" 안에 아무거나 들어갈 수 있음
+ALGORITHM = "HS256" # 일반적으로 많이 쓴느 암호화 알고리즘. "" 안에 아무거나 들어갈 수 없음
 ACCESSABLE_TIME = 30
 
 def create_access_token(data: dict):

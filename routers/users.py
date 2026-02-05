@@ -65,12 +65,13 @@ def get_current_user(token : str = Depends(oauth2_scheme), db : Session = Depend
     credentials_exception = HTTPException(status_code = status.HTTP_401_UNAUTHORIZED, detail = "로그인 정보를 확인할 수 없습니다",
                                           headers = {"WWW-Authenticate" : "Bearer"},)
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithm = [ALGORITHM]) # 토큰 해독 (Decode) # SECRET_KEY로 서명을 확인하고, 만료 시간(exp)도 자동으로 체크
+        payload = jwt.decode(token, SECRET_KEY, algorithms = [ALGORITHM]) # 토큰 해독 (Decode) # SECRET_KEY로 서명을 확인하고, 만료 시간(exp)도 자동으로 체크
 
         email : str | None = payload.get("sub")
 
         if email is None:
             raise credentials_exception
+        
     except InvalidTokenError :
         credentials_exception
 

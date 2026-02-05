@@ -22,7 +22,7 @@ OAuth2PasswordRequestForm을 사용하려면 이 라이브러리가 필수
 
 from fastapi import FastAPI
 from database import engine, Base
-from routers import users
+from routers import users, store
 
 Base.metadata.create_all(bind=engine)
 #테이블 생성 (앱 시작할 때 DB에 테이블이 없으면 자동으로 만들어줌)
@@ -30,6 +30,7 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI() 
 
 app.include_router(users.router)
+app.include_router(store.router)
 
 @app.get("/")
 def read_root():
