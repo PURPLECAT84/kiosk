@@ -25,11 +25,21 @@ async def create_store(store : StoreCreate, db : Session = Depends(get_db)
     if exsisting_store:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail = "이미 존재하는 매장입니다")
 
+    authority_stmt = select(User).where(User.email == store.user_email) #회원가입한 회원 중 권한 부여할 이메일 검색
+    target_user = db.execute(authority_stmt).scalars().first() #검색 실행하고 데이터 형식 벗겨서 제일 위(첫) 데이터 확인
+
+    if not target_user: #만약 검색한 이메일이 아니면
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail= "해당 이메일을 찾을 수 없습니다")
+    
+    if target_user.authority == "manager" :   #만약 해당 회원이 매니저면 점주로 승급시켜
+        target_user.authority ="owner"
+        db.add(target_user)
+    
     db_store = Store(
         name = store.name,
         address = store.address,
         type = store.type, 
-        user_id = store.user_id
+        user_id = target_user.id #스키마가 아니라, target_user는 User 모델 객체이므로 '.id'를 가져와야 함. Store 테이블의 user_id 칸에 <--- User 객체의 id(PK)를 넣음
     )
 
     db.add(db_store)
@@ -41,7 +51,7 @@ async def create_store(store : StoreCreate, db : Session = Depends(get_db)
 
 @router.get("/", response_model = List[StoreResponse], summary = "매장 조회", description = " 전체 매장 리스트 조회")
 async def read_store(skip: int = 0, limit : int = 10, 
-                     name : str | None = None, current_user: User = Depends(get_db),
+                     name : str | None = None, current_user: User = Depends(get_current_user),
                      db : Session = Depends(get_db)):
     
     stmt = select(Store) #일단 "모든 매장을 가져와라"
@@ -50,7 +60,7 @@ async def read_store(skip: int = 0, limit : int = 10,
       
         stmt = stmt.where(Store.name.contains(name)) #[검색 로직] 만약(if) 사용자가 검색어(name)를 보냈다면
 
-    if current_user.authority in ["master", "dev"]:
+    if current_user.authority in ["master", "dev"]: #제약 없음 (다 보여줌)
         pass
 
     elif current_user.authority == "owner":

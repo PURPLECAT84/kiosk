@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, ConfigDict
+from pydantic import BaseModel, EmailStr, ConfigDict #EmailStr 을 사용하기 위해선 email-validator 설치 필요
 from datetime import datetime
 from typing import Optional
 import uuid
@@ -10,7 +10,7 @@ class UserCreate(BaseModel):
     name : str
     phone : str
     address : str
-    authority: Optional[str] = "manager" #관리자가 생성하는 경우를 위해. models 의 기본값보다 우선한다
+    #authority: Optional[str] = "manager" #관리자가 생성하는 경우를 위해. models 의 기본값보다 우선한다. <- 인위적으로 넣으면 안되므로 삭제. 어차피 models 에 있음
 
 class UserUpdate(BaseModel):
     
@@ -51,7 +51,7 @@ class StoreCreate(BaseModel):
     name : str
     address : str
     type : str | None = None
-    user_id : uuid.UUID
+    user_email : EmailStr
 
 
 
