@@ -4,8 +4,8 @@ from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from database import get_db
 from models import User
-from schemas import UserCreate, UserResponse, UserLogin, Token
-from security import get_password_hash, verify_password, create_access_token, ALGORITHM, SECRET_KEY
+from schemas import UserCreate, UserResponse, UserLogin, Token, UserUpdate, UserPasswordUpdate
+from security import get_password_hash, verify_password, create_access_token, ALGORITHM, SECRET_KEY, pwd_context
 from typing import List
 import jwt
 from jwt.exceptions import InvalidTokenError
@@ -121,3 +121,58 @@ async def read_user(skip: int = 0, limit : int = 10,
     return users
 
 
+"회원정보 수정의 경우 단순 정보 수정과 패스워드 수정을 나눠서 작성(스키마 별도)"
+
+@router.patch("/me", response_model = UserResponse, summary="내 정보 수정", description="내 정보 수정")
+async def update_user_profile(
+    
+    body : UserUpdate, # <- 굳이 항목 하나하나를 다 불러올 필요 없이, 스키마만 불러오면 됨
+    db : Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user),
+):
+    if body.name:
+        current_user.name =body.name
+    if body.phone:
+        current_user.phone =body.phone
+    if body.address:
+        current_user.address =body.address 
+    #새로 업데이트 되는 데이터 (body) 를 기존 데이터 테이블 에 할당(=입력) 한다 
+
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+@router.patch("/me/password", summary = "비밀번호 변경")
+async def update_password(
+    body : UserPasswordUpdate,
+    db :Session = Depends(get_db),
+    current_user : User = Depends(get_current_user)
+):
+    #일단 기존 패스워드가 맞는지 확인
+    if not verify_password(body.current_password, current_user.password):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,detail="현재 비밀번호가 일치하지 않습니다")
+
+    if body.current_password == body.new_password:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail = "새 비밀번호는 기존 비밀번호와 달라야 합니다")
+    
+    if body.new_password !=body.new_password_check:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail = "새 비밀번호 확인과 일치하지 않습니다")
+    
+    hashed_password = get_password_hash(body.new_password) #new_password 를 해싱해서 저장하고
+    current_user.password = hashed_password # current_uer 에 할당(저장)
+
+    db.commit()
+    db.refresh(current_user)
+
+    return {"message" : "비밀번호가 성공적으로 변경되었습니다."}
+
+@router.delete("/me", status_code=status.HTTP_204_NO_CONTENT, summary="회원 탈퇴")
+async def delete_user(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    db.delete(current_user)
+    db.commit()
+    
+    return None
+     

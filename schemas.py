@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, ConfigDict #EmailStr 을 사용하기 위해선 email-validator 설치 필요
+from pydantic import BaseModel, EmailStr, ConfigDict, Field, field_validator #EmailStr 을 사용하기 위해선 email-validator 설치 필요
 from datetime import datetime
 from typing import Optional
 import uuid
@@ -13,12 +13,21 @@ class UserCreate(BaseModel):
     #authority: Optional[str] = "manager" #관리자가 생성하는 경우를 위해. models 의 기본값보다 우선한다. <- 인위적으로 넣으면 안되므로 삭제. 어차피 models 에 있음
 
 class UserUpdate(BaseModel):
-    
-    email : Optional[EmailStr] = None
-    password : Optional[str] = None
-    name : Optional[str] = None
-    phone : Optional[str] = None
-    address : Optional[str] = None
+    name: str | None = None
+    phone: str | None = None
+    address: str | None = None
+
+class UserPasswordUpdate(BaseModel):
+    current_password: str = Field(...,description="현재 비밀번호")
+    new_password : str = Field(..., min_length = 4, description="새 비밀번호")
+    new_password_check: str = Field(...,min_length = 4, description="새 비밀번호 확인")
+
+    @field_validator("new_password_check")
+    def password_match(cls, v, values):
+        if "new_password" in values.data and v != values.data["new_password"]:
+            raise ValueError("새 비밀번호가 일치하지 않습니다")
+        return v
+
 
 class UserResponse(BaseModel):
     
