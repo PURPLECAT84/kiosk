@@ -17,7 +17,7 @@ class User(Base):
     authority : Mapped[str] = mapped_column(String(20), nullable = False, default = "manager") #기본값 설정
     joined_date : Mapped[datetime] = mapped_column(DateTime, nullable = False, default = datetime.now)
 
-    store_authority_join = relationship("Store", back_populates = "ownership")
+    store_authority_join = relationship("Store", back_populates = "ownership", cascade="all, delete-orphan") #cascade 옵션 추가 user가 삭제되면 연결된 store_info도 같이 삭제됨
 
 """ sqlalchemy 2.0 방식, 자동완성기능과 검증 측면에서 우수, But 기존 대비 코드가 복잡함"""
 
@@ -30,7 +30,7 @@ class Store(Base):
     address : Mapped[str] = mapped_column(String, nullable = False)
     created_date : Mapped[datetime] = mapped_column(DateTime, nullable = False, default = datetime.now)
    
-    shelves = relationship("Shelve", back_populates = "store")
+    shelves = relationship("Shelve", back_populates = "store",cascade="all, delete-orphan")
 
     ownership = relationship("User", back_populates="store_authority_join")
 
@@ -45,7 +45,7 @@ class Shelve(Base):
     vender_code : Mapped[str] = mapped_column(String, nullable = False)
 
     store = relationship("Store", back_populates = "shelves")
-    categories = relationship("Category", back_populates = "shelve")
+    categories = relationship("Category", back_populates = "shelve", cascade="all, delete-orphan")
  
 
 class Category(Base):
@@ -55,7 +55,7 @@ class Category(Base):
     name : Mapped[str] = mapped_column(String, nullable = False) 
 
     shelve = relationship("Shelve", back_populates = "categories")
-    product = relationship("Product", back_populates = "category")
+    product = relationship("Product", back_populates = "category", cascade="all, delete-orphan")
 
 
 class Product(Base):
