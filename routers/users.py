@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from database import get_db
 from models import User
-from schemas import UserCreate, UserResponse, UserLogin, Token, UserUpdate, UserPasswordUpdate
+from schemas import UserCreate, UserResponse, UserLogin, Token, UserUpdate, UserPasswordUpdate, UserDelete
 from security import get_password_hash, verify_password, create_access_token, ALGORITHM, SECRET_KEY, pwd_context
 from typing import List
 import jwt
@@ -168,11 +168,18 @@ async def update_password(
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT, summary="회원 탈퇴")
 async def delete_user(
+    
+    confirm : UserDelete,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+    current_user: User = Depends(get_current_user),
+   ):
+    if not verify_password(confirm.password, current_user.password):
+          raise HTTPException(status_code = status.HTTP_403_FORBIDDEN, detail = "비밀번호가 일치하지 않습니다")
+      
+  
     db.delete(current_user)
     db.commit()
     
     return None
-     
+
+

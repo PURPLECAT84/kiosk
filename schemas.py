@@ -26,7 +26,11 @@ class UserPasswordUpdate(BaseModel):
     def password_match(cls, v, values):
         if "new_password" in values.data and v != values.data["new_password"]:
             raise ValueError("새 비밀번호가 일치하지 않습니다")
+            
         return v
+    
+class UserDelete(BaseModel):
+    password : str
 
 
 class UserResponse(BaseModel):
