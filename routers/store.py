@@ -110,3 +110,23 @@ async def update_store(
     db.referesh()
 
     return store
+
+@router.delete("/{store_id}", status_code = status.HTTP_204_NO_CONTENT, summary = "매장 삭제")
+async def delete_store(
+    store_id : uuid.UUID,
+    db : Session = Depends(get_db),
+    current_user : User = Depends(get_current_user)
+):
+    stmt = select(Store).where(Store.id == store_id)
+    store = db.execute(stmt).scalars().first()
+
+    if not store:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail = "매장을 찾을 수 없습니다")
+    
+    if current_user.authority not in ["dev","master"] and store.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="매장 삭제 권한이 없습니다")
+
+    db.delete(store)
+    db.commit()
+
+    return None
