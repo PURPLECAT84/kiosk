@@ -133,7 +133,7 @@ async def update_user_profile(
     if body.name:
         current_user.name =body.name
     if body.phone:
-        current_user.phone =body.phone
+        current_user.phone , =body.phone
     if body.address:
         current_user.address =body.address 
     #새로 업데이트 되는 데이터 (body) 를 기존 데이터 테이블 에 할당(=입력) 한다 

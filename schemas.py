@@ -72,7 +72,7 @@ class StoreUpdate(BaseModel):
 
     name : str | None = None
     address : str | None = None
-    type : str | None = None
+    type : str
     
 class StoreResponse(BaseModel):
 

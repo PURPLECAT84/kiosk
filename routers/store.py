@@ -76,3 +76,37 @@ async def read_store(skip: int = 0, limit : int = 10,
     stores = db.execute(stmt).scalars().all()#실행
 
     return stores
+
+@router.patch("/{store_id}", response_model= StoreResponse, summary = "매장정보 변경")
+async def update_store(
+    store_id : uuid.UUID,
+    body : StoreUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+    ):
+
+    stmt = select(Store).where(Store.id == store_id) #검색은 models(실제 테이블)에서 찾아서 매칭
+    store = db.execute(stmt).scalars().first()
+
+    if not store:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail = "매장을 찾을 수 없습니다")
+    
+    if current_user.authority not in ["dev", "master"] and store_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="본인의 매장만 수정할 수 있습니다")
+    
+    if body.type is not None : 
+        if current_user.authority not in ["dev","master"]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail = "매장 타입은 관리자만 수정할 수 있습니다")
+        
+        store.type = body.type
+
+    if body.name:
+        store.name = body.name
+    
+    if body.address:
+        store.address = body.address
+
+    db.commit()
+    db.referesh()
+
+    return store
