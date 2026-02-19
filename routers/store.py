@@ -10,13 +10,14 @@ import uuid
 
 
 router = APIRouter(prefix = "/stores", tags = ["stores"])
+AutherList = ["master" , "dev"]
 # prefix 설정: 이 파일의 모든 API는 앞에 /stores가 자동으로 붙음
 
 @router.post("/", response_model = StoreResponse, status_code = status. HTTP_201_CREATED, summary = "매장 생성", description = "신규매장 생성")
 async def create_store(store : StoreCreate, db : Session = Depends(get_db)
                        , current_user : User = Depends(get_current_user)):
     
-    if current_user.authority not in ["master","dev"] :
+    if current_user.authority not in AutherList :
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail = "매장 생성 권한이 없습니다")
 
     stmt = select(Store).where(Store.name == store.name)
@@ -60,7 +61,7 @@ async def read_store(skip: int = 0, limit : int = 10,
       
         stmt = stmt.where(Store.name.contains(name)) #[검색 로직] 만약(if) 사용자가 검색어(name)를 보냈다면
 
-    if current_user.authority in ["master", "dev"]: #제약 없음 (다 보여줌)
+    if current_user.authority in AutherList: #제약 없음 (다 보여줌)
         pass
 
     elif current_user.authority == "owner":
@@ -91,11 +92,11 @@ async def update_store(
     if not store:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail = "매장을 찾을 수 없습니다")
     
-    if current_user.authority not in ["dev", "master"] and store_id != current_user.id:
+    if current_user.authority not in AutherList and store_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="본인의 매장만 수정할 수 있습니다")
     
     if body.type is not None : 
-        if current_user.authority not in ["dev","master"]:
+        if current_user.authority not in AutherList:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail = "매장 타입은 관리자만 수정할 수 있습니다")
         
         store.type = body.type
@@ -123,7 +124,7 @@ async def delete_store(
     if not store:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail = "매장을 찾을 수 없습니다")
     
-    if current_user.authority not in ["dev","master"] and store.user_id != current_user.id:
+    if current_user.authority not in AutherList and store.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="매장 삭제 권한이 없습니다")
 
     db.delete(store)

@@ -113,6 +113,7 @@ class ShelveResponse(BaseModel):
 class CategoryCreate(BaseModel):
     
     name : str
+    shelve_id : uuid.UUID
 
 class CategoryUpdate(BaseModel):
 
@@ -123,6 +124,7 @@ class CategoryResponse(BaseModel):
     id : int
     name : str
     shelve_id : uuid.UUID
+    store_id : uuid.UUID
 
     model_config = ConfigDict(from_attributes = True)
 

@@ -65,6 +65,7 @@ class Category(Base):
     __tablename__ = "product_category"
     id : Mapped[int] = mapped_column(primary_key = True, index = True)
     shelve_id : Mapped[uuid.UUID] = mapped_column(ForeignKey("shelve_info.id"), nullable = False)
+    store_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("store_info.id"), nullable=False)
     name : Mapped[str] = mapped_column(String, nullable = False) 
 
     shelve = relationship("Shelve", back_populates = "categories")
@@ -75,6 +76,7 @@ class Product(Base):
     __tablename__ = "product_list"
     id : Mapped[uuid.UUID] = mapped_column(primary_key = True, default = uuid.uuid4, index = True)
     category_id :Mapped[int] = mapped_column(ForeignKey("product_category.id"), nullable = False ) 
+    store_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("store_info.id"), nullable=False)
     barcode : Mapped[str] = mapped_column(String, nullable = True, unique = True)
     name : Mapped[str] = mapped_column(String, nullable = False)
     price : Mapped[int] = mapped_column(Integer, nullable = False)

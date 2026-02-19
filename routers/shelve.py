@@ -10,6 +10,8 @@ import uuid
 
 router = APIRouter(prefix = "/shelves", tags = ["shelves"])
 
+AutherList = ["master" , "dev"]
+
 @router.post("/store/{store_id}/shelve", response_model = ShelveResponse, status_code = status. HTTP_201_CREATED, summary = "매대 생성", description = "신규 매대 생성")
 async def create_shelve(
     store_id : uuid.UUID,
@@ -22,7 +24,7 @@ async def create_shelve(
     if not target_store:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail= "해당 매장을 찾을 수 없습니다")
     
-    if current_user.authority not in ["master","dev"] and current_user.id != target_store.user_id:
+    if current_user.authority not in AutherList and current_user.id != target_store.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail = "본인 매장에만 매대를 생성할 수 있습니다")
 
     stmt = select(Shelve).where(Shelve.name == shelve.name, Shelve.store_id == store_id)
@@ -55,7 +57,7 @@ async def read_shelve(
     if not target_store:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail= "해당 매장을 찾을 수 없습니다")
     
-    if current_user.authority not in ["master","dev"] and current_user.id != target_store.user_id:
+    if current_user.authority not in AutherList and current_user.id != target_store.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail = "본인 매장에만 매대를 조회할 수 있습니다")
 
     shelve_stmt = select(Shelve).where(Shelve.store_id == store_id)
@@ -76,7 +78,7 @@ async def update_shelve(
     if not target_store:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail= "해당 매장을 찾을 수 없습니다")
     
-    if current_user.authority not in ["master","dev"] and current_user.id != target_store.user_id:
+    if current_user.authority not in AutherList and current_user.id != target_store.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail = "본인 매장에만 매대를 수정할 수 있습니다")
 
     shelve_stmt = select(Shelve).where(Shelve.id == shelve_id, Shelve.store_id == store_id)
@@ -112,7 +114,7 @@ async def delete_shelve(
     if not target_store:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail= "해당 매장을 찾을 수 없습니다")
     
-    if current_user.authority not in ["master","dev"] and current_user.id != target_store.user_id:
+    if current_user.authority not in AutherList and current_user.id != target_store.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail = "본인 매장에만 매대를 삭제할 수 있습니다")
 
     shelve_stmt = select(Shelve).where(Shelve.id == shelve_id, Shelve.store_id == store_id)
