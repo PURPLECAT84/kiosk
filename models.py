@@ -59,7 +59,7 @@ class Shelve(Base):
 
     store = relationship("Store", back_populates = "shelves")
     categories = relationship("Category", back_populates = "shelve", cascade="all, delete-orphan")
- 
+    products = relationship("Product", back_populates="shelve", cascade="all, delete-orphan")
 
 class Category(Base):
     __tablename__ = "product_category"
@@ -69,7 +69,7 @@ class Category(Base):
     name : Mapped[str] = mapped_column(String, nullable = False) 
 
     shelve = relationship("Shelve", back_populates = "categories")
-    product = relationship("Product", back_populates = "category", cascade="all, delete-orphan")
+    products = relationship("Product", back_populates = "category", cascade="all, delete-orphan")
 
 
 class Product(Base):
@@ -77,14 +77,17 @@ class Product(Base):
     id : Mapped[uuid.UUID] = mapped_column(primary_key = True, default = uuid.uuid4, index = True)
     category_id :Mapped[int] = mapped_column(ForeignKey("product_category.id"), nullable = False ) 
     store_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("store_info.id"), nullable=False)
-    barcode : Mapped[str] = mapped_column(String, nullable = True, unique = True)
+    shelve_id : Mapped[uuid.UUID] = mapped_column(ForeignKey("shelve_info.id"), nullable=False)
+    barcode : Mapped[str] = mapped_column(String, nullable = True)
     name : Mapped[str] = mapped_column(String, nullable = False)
     price : Mapped[int] = mapped_column(Integer, nullable = False)
     buy_from: Mapped[str] = mapped_column(String,nullable = True )
     created_date : Mapped[datetime] = mapped_column(DateTime, nullable = False, default = datetime.now)
+    image : Mapped[str] = mapped_column(String, nullable=False)
 
-    category = relationship("Category", back_populates = "product")
-
+    shelve = relationship("Shelve", back_populates="products")
+    category = relationship("Category", back_populates = "products")
+    
 
 """
 [ForeignKey 클래스]
