@@ -81,3 +81,83 @@ async def read_product_list(
 
     return products
 
+@router.patch("/store/{store_id}/product/{product_id}", response_model=ProductResponse, summary="상품정보수정")
+async def update_product(
+    store_id : uuid.UUID,
+    product_id : uuid.UUID, # ✅ URL 변수명과 일치시킴
+    update_data : ProductUpdate,
+    db : Session = Depends(get_db),
+    current_user : User = Depends(get_current_user)
+):
+    # 1. 매장 확인
+    target_store = db.get(Store, store_id)
+    if not target_store:
+        raise HTTPException(status_code=404, detail="해당 매장을 찾을 수 없습니다.")
+    
+    # 2. 상품 확인 및 소속 검증 (완벽한 방어 로직! 🛡️)
+    target_product = db.get(Product, product_id)
+    if not target_product or target_product.store_id != store_id:
+        raise HTTPException(status_code=404, detail="해당 상품을 찾을 수 없습니다.")
+    
+    # 3. 권한 확인
+    if current_user.authority not in AutherList and current_user.id != target_store.user_id:
+        raise HTTPException(status_code=403, detail="본인 매장 상품만 수정할 수 있습니다.")
+
+    # 4. 이름 업데이트 시 중복 검사 (최적화 💡)
+    if update_data.name is not None:
+        # 이름이 들어왔을 때만 같은 매대 안에서 중복되는지 확인 (자기 자신은 제외)
+        dup_stmt = select(Product).where(
+            Product.name == update_data.name, 
+            Product.shelve_id == target_product.shelve_id, 
+            Product.id != product_id
+        )
+        existing_product = db.scalar(dup_stmt)
+
+        if existing_product:
+            raise HTTPException(status_code=409, detail="해당 매대에 이미 같은 이름의 상품이 등록되어 있습니다.")
+        
+        target_product.name = update_data.name
+
+    # 5. 나머지 필드 업데이트
+    if update_data.price is not None:
+        target_product.price = update_data.price
+    if update_data.buy_from is not None:
+        target_product.buy_from = update_data.buy_from
+    if update_data.image is not None:
+        target_product.image = update_data.image
+        
+    # (선택 꿀팁) 만약 필드가 10개가 넘어가면 이전에 알려드렸던 아래 3줄로 퉁칠 수 있습니다!
+    # update_dict = update_data.model_dump(exclude_unset=True)
+    # for key, value in update_dict.items():
+    #     setattr(target_product, key, value)
+
+    db.commit()
+    db.refresh(target_product)
+    
+    return target_product 
+
+
+@router.delete("/store/{store_id}/product/{product_id}", status_code=status.HTTP_204_NO_CONTENT, summary="상품삭제")
+async def delete_product(   
+    store_id : uuid.UUID,
+    product_id : uuid.UUID, # ✅ URL 변수명과 일치시킴
+    db : Session = Depends(get_db),
+    current_user : User = Depends(get_current_user)
+):
+    # 1. 매장 확인
+    target_store = db.get(Store, store_id)
+    if not target_store:
+        raise HTTPException(status_code=404, detail="해당 매장을 찾을 수 없습니다.")
+    
+    # 2. 상품 확인 및 소속 검증 (완벽한 방어 로직! 🛡️)
+    target_product = db.get(Product, product_id)
+    if not target_product or target_product.store_id != store_id:
+        raise HTTPException(status_code=404, detail="해당 상품을 찾을 수 없습니다.")
+    
+    # 3. 권한 확인
+    if current_user.authority not in AutherList and current_user.id != target_store.user_id:
+        raise HTTPException(status_code=403, detail="본인 매장 상품만 삭제할 수 있습니다.")
+
+    # 4. 삭제
+    db.delete(target_product)
+    db.commit() 

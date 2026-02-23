@@ -147,7 +147,7 @@ class ProductUpdate(BaseModel):
 
 class ProductResponse(BaseModel):
 
-    id : uuid.UUID
+    product_id : uuid.UUID
     store_id : uuid.UUID
     shelve_id : uuid.UUID
     category_id : int
