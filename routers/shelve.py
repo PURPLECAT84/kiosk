@@ -2,13 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from database import get_db
-from models.models import Store, User, Shelve
+from models.store import Store
+from models.user import User
+from models.shelve import Shelve
 from schemas.shelve import ShelveCreate, ShelveResponse, ShelveUpdate
-from routers.users import get_current_user
+from routers.user import get_current_user
 from typing import List
 import uuid
 
-router = APIRouter(prefix = "/shelves", tags = ["shelves"])
+router = APIRouter()
 
 AutherList = ["master" , "dev"]
 

@@ -22,18 +22,20 @@ OAuth2PasswordRequestForm을 사용하려면 이 라이브러리가 필수
 
 from fastapi import FastAPI
 from database import engine, Base
-from routers import users, store, shelve, category, product
+from routers import user, store, shelve, category, product
+
+import models
 
 Base.metadata.create_all(bind=engine)
 #테이블 생성 (앱 시작할 때 DB에 테이블이 없으면 자동으로 만들어줌)
 
-app = FastAPI() 
+app = FastAPI(title="Kiosk Admin Center", description="키오스크 관리자 페이지", version="1.0.0") 
 
-app.include_router(users.router)
-app.include_router(store.router)
-app.include_router(shelve.router)
-app.include_router(category.router)
-app.include_router(product.router)
+app.include_router(user.router, prefix="/users", tags=["Users"])
+app.include_router(store.router, prefix="/store", tags=["Stores"])
+app.include_router(shelve.router, prefix="/shelves", tags=["Shelves"])
+app.include_router(category.router, prefix="/categories", tags=["Categories"])
+app.include_router(product.router, prefix="/products", tags=["Products"])
 
 @app.get("/")
 def read_root():

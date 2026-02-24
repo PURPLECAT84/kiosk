@@ -2,14 +2,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from database import get_db
-from models.models import Store, User
+from models.store import Store
+from models.user import User
 from schemas.store import StoreCreate, StoreResponse, StoreUpdate
-from routers.users import get_current_user
+from routers.user import get_current_user
 from typing import List
 import uuid
 
 
-router = APIRouter(prefix = "/stores", tags = ["stores"])
+router = APIRouter()
 AutherList = ["master" , "dev"]
 # prefix 설정: 이 파일의 모든 API는 앞에 /stores가 자동으로 붙음
 
