@@ -19,6 +19,7 @@ class Base(DeclarativeBase):
     pass
 
 
+DB_session = sessionmaker(autocommit = False, autoflush = False, bind = engine)
 def get_db():
     db = DB_session()
     try:
