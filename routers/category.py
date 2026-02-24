@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from database import get_db
-from models import Store, User, Shelve, Category
-from schemas import CategoryCreate, CategoryResponse,CategoryUpdate
+from models.models import Store, User, Shelve, Category
+from schemas.category import CategoryCreate, CategoryResponse,CategoryUpdate
 from routers.users import get_current_user
 from typing import List
 import uuid

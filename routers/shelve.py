@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from database import get_db
-from models import Store, User, Shelve
-from schemas import ShelveCreate, ShelveResponse, ShelveUpdate
+from models.models import Store, User, Shelve
+from schemas.shelve import ShelveCreate, ShelveResponse, ShelveUpdate
 from routers.users import get_current_user
 from typing import List
 import uuid

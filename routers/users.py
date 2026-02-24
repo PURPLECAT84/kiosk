@@ -3,9 +3,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from database import get_db
-from models import User
-from schemas import UserCreate, UserResponse, UserLogin, Token, UserUpdate, UserPasswordUpdate, UserDelete
-from security import get_password_hash, verify_password, create_access_token, ALGORITHM, SECRET_KEY, pwd_context
+from models.models import User
+from schemas.user import UserCreate, UserResponse, UserLogin, Token, UserUpdate, UserPasswordUpdate, UserDelete
+from core.security import get_password_hash, verify_password, create_access_token, ALGORITHM, SECRET_KEY, pwd_context
 from typing import List
 import jwt
 from jwt.exceptions import InvalidTokenError

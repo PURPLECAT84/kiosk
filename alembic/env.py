@@ -8,7 +8,7 @@ from alembic import context
 import sys, os
 sys.path.append(os.getcwd()) # 현재 폴더 위치를 인식하게 함
 from database import Base    # 우리 프로젝트의 Base 가져오기
-from models import User, Store, Shelve, Category, Product
+from models.models import User, Store, Shelve, Category, Product
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
