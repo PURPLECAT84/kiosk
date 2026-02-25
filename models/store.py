@@ -15,6 +15,6 @@ class Store(Base):
     created_date : Mapped[datetime] = mapped_column(DateTime, nullable = False, default = datetime.now)
    
     shelves = relationship("Shelve", back_populates = "store",cascade="all, delete-orphan")
-
     ownership = relationship("User", back_populates="store_authority_join")
+    orders = relationship("Order", back_populates="store", cascade="all, delete-orphan")
 

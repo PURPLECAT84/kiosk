@@ -21,6 +21,7 @@ class Product(Base):
 
     shelve = relationship("Shelve", back_populates="products")
     category = relationship("Category", back_populates = "products")
+    order_items = relationship("OrderItem", back_populates="product", cascade="all, delete-orphan")
     
 
 """
