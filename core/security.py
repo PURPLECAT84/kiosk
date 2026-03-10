@@ -30,3 +30,6 @@ def create_access_token(data: dict):
     encoded_jwt = jwt.encode(copied_data, SECRET_KEY, algorithm = ALGORITHM)
 
     return encoded_jwt
+
+
+TOSS_SECREET_KEY = "test_sk_P9BRQmyarYgLyGODRlYN3J07KzLN"
