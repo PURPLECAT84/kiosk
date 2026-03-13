@@ -24,12 +24,23 @@ from fastapi import FastAPI
 from database import engine, Base
 from routers import user, store, shelve, category, product,order, order_item
 
+from fastapi.middleware.cors import CORSMiddleware
+
 import models
 
 Base.metadata.create_all(bind=engine)
 #테이블 생성 (앱 시작할 때 DB에 테이블이 없으면 자동으로 만들어줌)
 
+
 app = FastAPI(title="Kiosk Admin Center", description="키오스크 관리자 페이지", version="1.0.0") 
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 모든 주소에서 내 API에 접근하는 것을 허용 (실무에선 특정 도메인만 넣습니다)
+    allow_credentials=True,
+    allow_methods=["*"],  # GET, POST, DELETE 등 모든 메서드 허용
+    allow_headers=["*"],  # 모든 헤더 허용
+)
 
 app.include_router(user.router, prefix="/users", tags=["Users"])
 app.include_router(store.router, prefix="/store", tags=["Stores"])

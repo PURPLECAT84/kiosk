@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends,HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import select, desc
 import httpx
 import uuid
 import base64
+from typing import List
+from datetime import datetime, time
 
 from database import get_db
 from models.order import Order
@@ -79,3 +82,50 @@ async def create_order(
     db.refresh(new_order)
 
     return new_order
+
+
+@router.get("/", response_model=List[OrderResponse])
+async def get_orders(
+    store_id : uuid.UUID,
+    start_date : datetime | None = None,
+    end_date : datetime | None = None,
+    db : Session = Depends(get_db)
+):
+    stmt = select(Order).where(Order.store_id == store_id)
+
+    if start_date:
+        stmt = stmt.where(Order.created_date >=start_date)
+    
+    if end_date:
+        # 프론트가 00:00:00으로 보낸 시간을 그날의 끝(23:59:59.999999)으로 꽉 채워줌
+        end_date_max = datetime.combine(end_date.date(), time.max)
+        stmt = stmt.where(Order.created_date <= end_date_max)
+    
+    
+    stmt = stmt.order_by(desc(Order.created_date))
+
+    orders = db.scalars(stmt).all()
+
+    return orders
+
+
+@router.delete("/{order_id}", response_model=OrderResponse)
+async def delete_orders(
+    order_id: int,
+    db : Session = Depends(get_db)
+):
+
+    order = db.get(Order, order_id)
+
+    if not order:
+        raise HTTPException(status_code=404, detail="해당 주문 내역을 찾을 수 없습니다.")
+    
+    if order.status == "REFUNDED":
+        raise HTTPException(status_code=400, detail="이미 취소(환불) 처리된 주문입니다.")
+    
+    order.status = "REFUNDED"
+
+    db.commit()
+    db.refresh(order)
+
+    return order

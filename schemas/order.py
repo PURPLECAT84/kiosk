@@ -25,7 +25,7 @@ class OrderResponse(BaseModel):
     payment_provider : str
     approval_code : str
     status : str | None = None
-    create_date : datetime
+    created_date : datetime
     items : List[OrderItemResponse] # 영수증 상세 내역도 같이 보여주기
 
     model_config = ConfigDict(from_attributes = True)
