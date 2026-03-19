@@ -170,26 +170,34 @@ async def delete_product(
     db.commit() 
 
 
-    """===================== 상품 재고/상태 빠른 변경 (리모컨) ============================"""
+
+"""===================== 상품 재고/상태 빠른 변경 (리모컨) ============================"""
 @router.patch("/{product_id}/status", summary="재고 및 판매상태 변경")
 async def update_product_status(
     product_id: uuid.UUID,
     body: ProductStatusUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user) # 🔒 사장님만 조작 가능
+    current_user: User = Depends(get_current_user)
 ):
     product = db.get(Product, product_id)
     if not product:
         raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다.")
 
-    # 전달받은 값만 골라서 업데이트
-    if body.stock is not None:
-        product.stock = body.stock
-    if body.is_active is not None:
-        product.is_active = body.is_active
-    if body.expiration_date is not None:
-        product.expiration_date = body.expiration_date
+    # 🔥 핵심: 사용자가 스웨거에서 '명시적으로 입력한(보낸)' 값만 딕셔너리로 뽑아냅니다.
+    # (입력 안 한 건 아예 키(key) 자체가 안 나옵니다!)
+    update_data = body.model_dump(exclude_unset=True)
+
+    # 파이썬의 getattr, setattr을 쓰면 코드가 엄청나게 짧고 우아해집니다!
+    for key, value in update_data.items():
+        setattr(product, key, value) 
+        # 설명: product.stock = 10, product.expiration_date = None 처럼 알아서 쏙쏙 들어갑니다.
 
     db.commit()
     db.refresh(product)
-    return {"message": f"[{product.name}] 상태가 업데이트 되었습니다.", "current_stock": product.stock, "is_active": product.is_active}
+    
+    return {    
+        "message": f"[{product.name}] 상태가 업데이트 되었습니다.", 
+        "current_stock": product.stock, 
+        "is_active": product.is_active,
+        "expiration_date": product.expiration_date
+    }
