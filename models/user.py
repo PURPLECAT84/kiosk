@@ -2,9 +2,7 @@ from sqlalchemy import Integer, String, DateTime
 from database import Base
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import uuid
-from sqlalchemy.types import Uuid #<- 테이블에 저장 될 UUID 라는 타입 선언
 from datetime import datetime
-
 
 class User(Base):
     __tablename__ = "user_info"
