@@ -19,6 +19,7 @@ class ProductUpdate(BaseModel):
     price : int | None = None
     buy_from : str | None = None
     image : str | None = None
+    
 
 class ProductResponse(BaseModel):
 
@@ -34,3 +35,8 @@ class ProductResponse(BaseModel):
     image : str
 
     model_config = ConfigDict(from_attributes = True)
+
+class ProductStatusUpdate(BaseModel):
+    stock: int | None = None
+    is_active: bool | None = None
+    expiration_date: datetime | None = None

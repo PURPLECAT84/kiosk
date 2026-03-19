@@ -11,6 +11,10 @@ from routers.user import get_current_user
 from typing import List
 import uuid
 
+
+from schemas.product import ProductStatusUpdate
+from core.dependency import get_current_user
+
 router = APIRouter()
 
 AutherList = ["master" , "dev"]
@@ -164,3 +168,28 @@ async def delete_product(
     # 4. 삭제
     db.delete(target_product)
     db.commit() 
+
+
+    """===================== 상품 재고/상태 빠른 변경 (리모컨) ============================"""
+@router.patch("/{product_id}/status", summary="재고 및 판매상태 변경")
+async def update_product_status(
+    product_id: uuid.UUID,
+    body: ProductStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user) # 🔒 사장님만 조작 가능
+):
+    product = db.get(Product, product_id)
+    if not product:
+        raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다.")
+
+    # 전달받은 값만 골라서 업데이트
+    if body.stock is not None:
+        product.stock = body.stock
+    if body.is_active is not None:
+        product.is_active = body.is_active
+    if body.expiration_date is not None:
+        product.expiration_date = body.expiration_date
+
+    db.commit()
+    db.refresh(product)
+    return {"message": f"[{product.name}] 상태가 업데이트 되었습니다.", "current_stock": product.stock, "is_active": product.is_active}

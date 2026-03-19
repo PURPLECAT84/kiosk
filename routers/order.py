@@ -5,7 +5,7 @@ from sqlalchemy import select, desc
 import uuid
 from typing import List
 from datetime import datetime, time
-
+from models.product import Product
 from database import get_db
 from models.order import Order
 from models.user import User
@@ -54,19 +54,26 @@ async def get_orders(
 async def delete_orders(
     order_id: int,
     db: Session = Depends(get_db),
-    # 🔒 문지기 배치: 로그인한(자물쇠를 푼) 사장님만 지울 수 있습니다!
     current_user: User = Depends(get_current_user) 
 ):
     order = db.get(Order, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="해당 주문 내역을 찾을 수 없습니다.")
-    
     if order.status == "REFUNDED":
         raise HTTPException(status_code=400, detail="이미 취소(환불) 처리된 주문입니다.")
     
-    # DB에서 삭제하지 않고 상태만 바꿈 (Soft Delete)
+    # 1. 주문 상태 변경
     order.status = "REFUNDED"
+
+    # 🔥 2. 재고(Stock) 롤백 로직!
+    # 주의: Order 모델에 items = relationship("OrderItem") 이 설정되어 있어야 작동합니다.
+    for item in order.items:
+        product = db.get(Product, item.product_id)
+        if product:
+            product.stock += item.quantity
+            # 환불돼서 재고가 다시 생겼으니 판매 스위치 ON
+            product.is_active = True 
+
     db.commit()
     db.refresh(order)
-
     return order

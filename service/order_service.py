@@ -4,6 +4,7 @@ from fastapi import HTTPException
 import httpx
 import uuid
 import base64
+from datetime import datetime
 
 from models.order import Order
 from models.order_item import OrderItem
@@ -46,12 +47,33 @@ async def create_order_transaction(db: Session, order_data: OrderCreate) -> Orde
         # 확정(commit) 짓기 전에 임시로 DB에 밀어 넣어서 주문번호(new_order.id)만 빠르게 받아옵니다.
         db.flush() 
 
-        # [3단계] 장바구니 내용물(OrderItem) 달아주기
+        # [3단계] 장바구니 내용물(OrderItem) 달아주기 & 🔥 재고 검증/차감
         for item in order_data.items:
             product = db.get(Product, item.product_id)
             if not product: 
                 raise HTTPException(status_code=404, detail=f"상품ID {item.product_id}를 찾을 수 없습니다")
 
+            # 🔥 [요구사항 2] 사장님이 강제로 미판매 처리한 상품인가?
+            if not product.is_active:
+                raise HTTPException(status_code=400, detail=f"[{product.name}] 상품은 현재 판매가 중단되었습니다.")
+            
+            # 🔥 [요구사항 3] 유통기한이 지났는가? (Lazy Check)
+            if product.expiration_date and product.expiration_date < datetime.now():
+                product.is_active = False # 시간이 지났으므로 영구 미판매 처리!
+                raise HTTPException(status_code=400, detail=f"[{product.name}] 상품은 판매 기한이 만료되었습니다.")
+            
+            # 🔥 재고가 충분한가?
+            if product.stock < item.quantity:
+                raise HTTPException(status_code=400, detail=f"[{product.name}] 재고가 부족합니다. (남은 수량: {product.stock}개)")
+
+            # ✅ 모든 검사를 통과했다면 재고를 깎습니다!
+            product.stock -= item.quantity
+            
+            # (옵션) 만약 재고가 0이 되었다면 자동으로 미판매 처리!
+            if product.stock == 0:
+                product.is_active = False
+
+            # 장바구니에 담기
             order_item = OrderItem(
                 order_id=new_order.id, 
                 product_id=product.id,
@@ -59,7 +81,7 @@ async def create_order_transaction(db: Session, order_data: OrderCreate) -> Orde
                 product_price=product.price,
                 quantity=item.quantity
             )
-            db.add(order_item) # ✅ 들여쓰기 수정 완료! 이제 반복문을 돌며 여러 개를 잘 담습니다.
+            db.add(order_item)
 
         # 4단계: 영수증과 장바구니를 한 번에 도장 쾅! (에러 없으면 최종 확정)
         db.commit()
