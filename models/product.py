@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, String, DateTime, ForeignKey
+from sqlalchemy import Integer, String, DateTime, ForeignKey,Boolean
 from database import Base
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import uuid
@@ -18,6 +18,11 @@ class Product(Base):
     buy_from: Mapped[str] = mapped_column(String,nullable = True )
     created_date : Mapped[datetime] = mapped_column(DateTime, nullable = False, default = datetime.now)
     image : Mapped[str] = mapped_column(String, nullable=False)
+    stock: Mapped[int] = mapped_column(Integer, default=0) # 1. 남은 재고 수량
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True) # 2. 강제 판매중단 스위치 (True/False)
+    expiration_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True) # 3. 유통기한 (선택)
+
+
 
     shelve = relationship("Shelve", back_populates="products")
     category = relationship("Category", back_populates = "products")

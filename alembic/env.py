@@ -6,9 +6,19 @@ from sqlalchemy import pool
 from alembic import context
 
 import sys, os
-sys.path.append(os.getcwd()) # 현재 폴더 위치를 인식하게 함
+# 현재 폴더 위치(최상위 디렉토리)를 파이썬이 인식하게 함
+sys.path.append(os.getcwd()) 
+
 from database import Base    # 우리 프로젝트의 Base 가져오기
-from models.models import User, Store, Shelve, Category, Product
+
+# 🔥 [수정된 부분] 과거의 models.models는 지우고, 쪼개진 파일들에서 하나씩 예쁘게 불러옵니다.
+from models.user import User
+from models.store import Store
+from models.shelve import Shelve
+from models.category import Category
+from models.product import Product
+from models.order import Order
+from models.order_item import OrderItem
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -21,9 +31,8 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-# from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-target_metadata = Base.metadata
+target_metadata = Base.metadata # 알렘빅이 이 Base를 보고 테이블 모양을 파악합니다.
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
