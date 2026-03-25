@@ -22,7 +22,7 @@ OAuth2PasswordRequestForm을 사용하려면 이 라이브러리가 필수
 
 from fastapi import FastAPI
 from database import engine, Base
-from routers import user, store, shelve, category, product,order, order_item
+from routers import user, store, shelve, category, product,order, statistics
 
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -48,6 +48,7 @@ app.include_router(shelve.router, prefix="/shelves", tags=["Shelves"])
 app.include_router(category.router, prefix="/categories", tags=["Categories"])
 app.include_router(product.router, prefix="/products", tags=["Products"])
 app.include_router(order.router, prefix="/order", tags=["orders"])
+app.include_router(statistics.router, prefix="/dashboard", tags=["dashboard"])
 #app.include_router(order_item.router, prefix="/order_item", tags=["order_items"])
 
 @app.get("/")
