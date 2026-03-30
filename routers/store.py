@@ -17,31 +17,25 @@ AutherList = ["master" , "dev"]
 @router.post("/", response_model = StoreResponse, status_code = status. HTTP_201_CREATED, summary = "매장 생성", description = "신규매장 생성")
 async def create_store(store : StoreCreate, db : Session = Depends(get_db)
                        , current_user : User = Depends(get_current_user)):
-    
-    if current_user.authority not in AutherList :
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail = "매장 생성 권한이 없습니다")
+    # 누구나 매장을 만들고자 할 때 권한 체크를 해제하거나 변경합니다.
+    # if current_user.authority not in AutherList :
+    #     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail = "매장 생성 권한이 없습니다")
 
     stmt = select(Store).where(Store.name == store.name)
     exsisting_store = db.execute(stmt).scalars().first()
 
     if exsisting_store:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail = "이미 존재하는 매장입니다")
-
-    authority_stmt = select(User).where(User.email == store.user_email) #회원가입한 회원 중 권한 부여할 이메일 검색
-    target_user = db.execute(authority_stmt).scalars().first() #검색 실행하고 데이터 형식 벗겨서 제일 위(첫) 데이터 확인
-
-    if not target_user: #만약 검색한 이메일이 아니면
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail= "해당 이메일을 찾을 수 없습니다")
     
-    if target_user.authority == "manager" :   #만약 해당 회원이 매니저면 점주로 승급시켜
-        target_user.authority ="owner"
-        db.add(target_user)
+    if current_user.authority == "manager" :   #만약 해당 회원이 매니저면 점주로 승급시켜
+        current_user.authority ="owner"
+        db.add(current_user)
     
     db_store = Store(
         name = store.name,
         address = store.address,
         type = store.type, 
-        user_id = target_user.id #스키마가 아니라, target_user는 User 모델 객체이므로 '.id'를 가져와야 함. Store 테이블의 user_id 칸에 <--- User 객체의 id(PK)를 넣음
+        user_id = current_user.id
     )
 
     db.add(db_store)

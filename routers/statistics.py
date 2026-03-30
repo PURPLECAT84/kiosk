@@ -21,6 +21,7 @@ def get_dashboard_summary (db : Session = Depends(get_db),
         )
 
     today_start = date.today()
+    month_start = today_start.replace(day=1)
 
     total_sales = db.scalar(
         select(func.sum(Order.total_amount)).where(Order.created_date >= today_start)
@@ -28,6 +29,13 @@ def get_dashboard_summary (db : Session = Depends(get_db),
 
     if total_sales == None:
         total_sales = 0
+
+    monthly_sales = db.scalar(
+        select(func.sum(Order.total_amount)).where(Order.created_date >= month_start)
+    )
+
+    if monthly_sales == None:
+        monthly_sales = 0
 
     total_order = db.scalar(
         select(func.count(Order.id)).where(Order.created_date >= today_start)
@@ -39,7 +47,8 @@ def get_dashboard_summary (db : Session = Depends(get_db),
 
     return {
         "today_sales" : total_sales,
-        "today_orders" : total_order
+        "today_orders" : total_order,
+        "monthly_sales": monthly_sales
     }
 
 

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+import shutil
+import os
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from database import get_db
@@ -201,3 +203,25 @@ async def update_product_status(
         "is_active": product.is_active,
         "expiration_date": product.expiration_date
     }
+
+
+@router.post("/image", summary="상품 이미지 단일 업로드")
+async def upload_product_image(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user)
+):
+    if file.size > 2 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="이미지 파일 크기는 2MB 이하여야 합니다.")
+        
+    ext = file.filename.split('.')[-1].lower()
+    if ext not in ['jpg', 'jpeg', 'png', 'webp', 'gif']:
+        raise HTTPException(status_code=400, detail="지원하지 않는 이미지 형식입니다.")
+        
+    os.makedirs("static/images", exist_ok=True)
+    filename = f"{uuid.uuid4()}.{ext}"
+    file_path = f"static/images/{filename}"
+    
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+        
+    return {"image_url": f"/static/images/{filename}"}

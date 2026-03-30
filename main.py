@@ -25,14 +25,19 @@ from database import engine, Base
 from routers import user, store, shelve, category, product,order, statistics
 
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
 
 import models
 
 Base.metadata.create_all(bind=engine)
 #테이블 생성 (앱 시작할 때 DB에 테이블이 없으면 자동으로 만들어줌)
 
+os.makedirs("static/images", exist_ok=True)
 
 app = FastAPI(title="Kiosk Admin Center", description="키오스크 관리자 페이지", version="1.0.0") 
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.add_middleware(
     CORSMiddleware,

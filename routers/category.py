@@ -164,3 +164,24 @@ async def delete_category(
     db.commit()
 
     return None
+
+
+# -----------------------------------------------------------
+# 5. 매장의 모든 카테고리 조회 (GET) - 프론트엔드 용
+# -----------------------------------------------------------
+@router.get("/store/{store_id}", response_model=List[CategoryResponse], summary="특정 매장의 모든 카테고리 조회")
+async def read_categories_by_store(
+    store_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    target_store = db.get(Store, store_id)
+    if not target_store:
+        raise HTTPException(status_code=404, detail="해당 매장을 찾을 수 없습니다.")
+        
+    if current_user.authority not in AutherList and current_user.id != target_store.user_id:
+        raise HTTPException(status_code=403, detail="본인 매장의 카테고리만 조회할 수 있습니다.")
+
+    cat_stmt = select(Category).where(Category.store_id == store_id)
+    categories = db.execute(cat_stmt).scalars().all()
+    return categories
