@@ -65,7 +65,7 @@ async def read_store(skip: int = 0, limit : int = 10,
     if current_user.authority in AutherList: #제약 없음 (다 보여줌)
         pass
 
-    elif current_user.authority == "owner":
+    elif current_user.authority == "owner" or current_user.authority == "manager":
         stmt = stmt.where(Store.user_id == current_user.id)
 
     else:
