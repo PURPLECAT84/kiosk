@@ -22,7 +22,7 @@ OAuth2PasswordRequestForm을 사용하려면 이 라이브러리가 필수
 """
 
 
-from fastapi import FastAPI
+"""from fastapi import FastAPI
 from database import engine, Base
 from routers import user, store, shelve, category, product,order, statistics
 
@@ -60,5 +60,32 @@ app.include_router(statistics.router, prefix="/dashboard", tags=["dashboard"])
 
 @app.get("/")
 def read_root():
-    return{"message" : "Welcome to Kiosk Server"}
+    return{"message" : "Welcome to Kiosk Server"}"""
 
+
+
+"""=============카카오로그인테스트==============="""
+
+from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+app = FastAPI(title="키오스크 외부 인증 테스트")
+
+# 🚨 여기에 작성자님의 실제 Supabase 프로젝트 URL을 넣어주세요!
+# 예: "https://abcdefghijklmno.supabase.co"
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+
+@app.get("/auth/kakao/login", tags=["간편 로그인"])
+async def login_with_kakao():
+    """
+    이 주소로 들어오면, Supabase가 만들어둔 카카오 로그인 창으로 자동 이동(Redirect) 시킵니다.
+    """
+    # Supabase의 공식 소셜 로그인 진입 주소 형식입니다.
+    redirect_url = f"{SUPABASE_URL}/auth/v1/authorize?provider=kakao"
+    
+    # 유저를 저 주소로 튕겨 보냅니다!
+    return RedirectResponse(url=redirect_url)
