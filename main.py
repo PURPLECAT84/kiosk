@@ -60,9 +60,10 @@ app.include_router(order.router, prefix="/order", tags=["orders"])
 app.include_router(statistics.router, prefix="/dashboard", tags=["dashboard"])
 app.include_router(social_login.auth_router)
 #app.include_router(order_item.router, prefix="/order_item", tags=["order_items"])
+from fastapi.responses import RedirectResponse, FileResponse
 @app.get("/")
 def read_root():
-    return{"message" : "Welcome to Kiosk Server"}
+    return FileResponse("index.html")
 
 
 

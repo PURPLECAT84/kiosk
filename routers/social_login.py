@@ -54,7 +54,7 @@ async def social_login(provider: str):
         res = supabase.auth.sign_in_with_oauth({
             "provider": provider,
             "options": {
-                "redirect_to": "http://localhost:3000/" 
+                "redirect_to": "http://127.0.0.1:8000/" 
             }
         })
 
@@ -91,14 +91,12 @@ async def exchange_supabase_token(request: TokenExchangeRequest, db: Session = D
         
         # 3. 없다면 자동 회원가입
         if not user:
-            dummy_password = str(uuid.uuid4())
             user = UserInfo(
+                id=uuid.UUID(user_resp.user.id),
                 email=email,
-                password=dummy_password,
                 name=f"User_{email.split('@')[0]}",
                 phone="010-0000-0000",
-                role=UserRole.USER,
-                address=""
+                role=UserRole.STAFF
             )
             db.add(user)
             db.commit()
