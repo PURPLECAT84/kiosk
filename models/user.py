@@ -47,6 +47,12 @@ class UserInfo(Base):
 
     # 관계 설정 (1:N)
     businesses: Mapped[List["BusinessInfo"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
+    owned_stores: Mapped[List["Store"]] = relationship(
+        "Store", foreign_keys="[Store.user_id]", back_populates="owner"
+    )
+    store: Mapped[Optional["Store"]] = relationship(
+        "Store", foreign_keys="[UserInfo.store_id]", back_populates="staff_members"
+    )
 
 
 # 🏢 사업자 등록 정보 테이블

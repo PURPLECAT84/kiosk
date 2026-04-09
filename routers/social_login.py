@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import RedirectResponse
-from supabase import create_client, Client
+from supabase import create_client, Client, ClientOptions
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -27,8 +27,12 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     # 환경 변수가 없으면 서버 구동 시 즉시 에러를 발생시켜 문제를 알도록 합니다.
     raise RuntimeError("Supabase 환경변수(URL, KEY)가 설정되지 않았습니다. .env 파일을 확인해주세요.")
 
-# Supabase 클라이언트를 초기화 (연결) 합니다.
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+# Supabase 클라이언트를 초기화 (연결) 합니다. (프론트엔드에서 읽을 수 있게 JS 호환Implicit flow 적용)
+supabase: Client = create_client(
+    SUPABASE_URL, 
+    SUPABASE_KEY, 
+    options=ClientOptions(flow_type="implicit")
+)
 
 # 소셜 로그인 전용 라우터를 생성합니다.
 auth_router = APIRouter(
