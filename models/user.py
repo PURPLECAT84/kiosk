@@ -42,7 +42,7 @@ class UserInfo(Base):
     # Enum 적용
     role: Mapped[UserRole] = mapped_column(default=UserRole.STAFF) #권한
     status: Mapped[UserStatus] = mapped_column(default=UserStatus.PENDING) #상태
-    store_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("store_info.id"), ondelete="SET NULL") #소속 매장아이디 (복수가능)
+    store_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("store_info.id", ondelete="SET NULL")) #소속 매장아이디 (복수가능)
    
 
     # 관계 설정 (1:N)

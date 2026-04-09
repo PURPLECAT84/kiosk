@@ -5,7 +5,7 @@ from database import get_db
 from models.category import Category
 from models.shelve import Shelve
 from models.store import Store
-from models.user import User
+from models.user import UserInfo, UserRole
 from schemas.category import CategoryCreate, CategoryResponse,CategoryUpdate
 from routers.user import get_current_user
 from typing import List
@@ -13,7 +13,7 @@ import uuid
 
 router = APIRouter()
 
-AutherList = ["master" , "dev"]
+AutherList = [UserRole.MASTER, UserRole.DEV]
 
 # -----------------------------------------------------------
 # 1. 카테고리 생성 (POST)
@@ -22,7 +22,7 @@ AutherList = ["master" , "dev"]
 async def create_category(
     category: CategoryCreate, 
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: UserInfo = Depends(get_current_user)
 ):
     # 1. 입력받은 매대(Shelve) 찾기
 
@@ -38,7 +38,7 @@ async def create_category(
 
 
     # 3. 권한 확인 (본인 매장의 매대인가?)
-    if current_user.authority not in AutherList and current_user.id != target_store.user_id:
+    if current_user.role not in AutherList and current_user.id != target_store.user_id:
         raise HTTPException(status_code=403, detail="본인 매장에만 카테고리를 생성할 수 있습니다.")
 
     # 4. 중복 확인 (해당 매대 안에서 이름 중복 방지) ***2개 조건 검색 단순화***
@@ -69,7 +69,7 @@ async def create_category(
 async def read_categories_by_shelve(
     shelve_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: UserInfo = Depends(get_current_user)
 ):
     # 1. 매대 및 소속 매장 확인
     shelve_stmt = select(Shelve).where(Shelve.id == shelve_id)
@@ -82,7 +82,7 @@ async def read_categories_by_shelve(
     target_store = db.execute(store_stmt).scalars().first()
 
     # 2. 권한 확인
-    if current_user.authority not in AutherList and current_user.id != target_store.user_id:
+    if current_user.role not in AutherList and current_user.id != target_store.user_id:
         raise HTTPException(status_code=403, detail="본인 매장의 카테고리만 조회할 수 있습니다.")
 
     # 3. 매대에 속한 카테고리 전체 조회
@@ -100,7 +100,7 @@ async def update_category(
     category_id: int,
     body: CategoryUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: UserInfo = Depends(get_current_user)
 ):
     # 1. 수정할 카테고리 바로 찾기
     cat_stmt = select(Category).where(Category.id == category_id)
@@ -114,7 +114,7 @@ async def update_category(
     target_store = db.execute(store_stmt).scalars().first()
 
     # 3. 권한 체크
-    if current_user.authority not in AutherList and current_user.id != target_store.user_id:
+    if current_user.role not in AutherList and current_user.id != target_store.user_id:
         raise HTTPException(status_code=403, detail="본인 매장의 카테고리만 수정할 수 있습니다.")
 
     # 4. 중복 체크 (이름을 바꿀 경우, 같은 매대 안에 동일한 이름이 있는지 검사)
@@ -143,7 +143,7 @@ async def update_category(
 async def delete_category(
     category_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: UserInfo = Depends(get_current_user)
 ):
     # 1. 카테고리 찾기
     cat_stmt = select(Category).where(Category.id == category_id)
@@ -156,7 +156,7 @@ async def delete_category(
     store_stmt = select(Store).where(Store.id == target_category.store_id)
     target_store = db.execute(store_stmt).scalars().first()
 
-    if current_user.authority not in AutherList and current_user.id != target_store.user_id:
+    if current_user.role not in AutherList and current_user.id != target_store.user_id:
         raise HTTPException(status_code=403, detail="본인 매장의 카테고리만 삭제할 수 있습니다.")
 
     # 3. 삭제
@@ -173,13 +173,13 @@ async def delete_category(
 async def read_categories_by_store(
     store_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: UserInfo = Depends(get_current_user)
 ):
     target_store = db.get(Store, store_id)
     if not target_store:
         raise HTTPException(status_code=404, detail="해당 매장을 찾을 수 없습니다.")
         
-    if current_user.authority not in AutherList and current_user.id != target_store.user_id:
+    if current_user.role not in AutherList and current_user.id != target_store.user_id:
         raise HTTPException(status_code=403, detail="본인 매장의 카테고리만 조회할 수 있습니다.")
 
     cat_stmt = select(Category).where(Category.store_id == store_id)

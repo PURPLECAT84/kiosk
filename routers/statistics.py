@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, select, desc
 from datetime import date
 from models.order import Order
-from models.user import User
+from models.user import UserInfo, UserRole
 from models.order_item import OrderItem
 from database import get_db
 from core.dependency import get_current_user
@@ -12,9 +12,9 @@ router = APIRouter()
 
 @router.get("/summary", summary = "오늘의 대시보드 요약")
 def get_dashboard_summary (db : Session = Depends(get_db),
-                           current_user: User = Depends(get_current_user)):
+    current_user: UserInfo = Depends(get_current_user)):
     
-    if current_user.authority not in ["owner", "admin"]:
+    if current_user.role not in [UserRole.MANAGER, UserRole.MASTER]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
             detail="대시보드는 사장님만 볼 수 있는 1급 기밀입니다!"
@@ -55,9 +55,9 @@ def get_dashboard_summary (db : Session = Depends(get_db),
 
 @router.get("/best-sellers", summary="오늘의 베스트셀러 Top 5")
 def get_best_sellers(db: Session = Depends(get_db),
-                     current_user: User = Depends(get_current_user)):
+                     current_user: UserInfo = Depends(get_current_user)):
     
-    if current_user.authority not in ["owner", "admin"]:
+    if current_user.role not in [UserRole.MANAGER, UserRole.MASTER]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
             detail="대시보드는 사장님만 볼 수 있는 1급 기밀입니다!"

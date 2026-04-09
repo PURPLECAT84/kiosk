@@ -8,7 +8,7 @@ from datetime import datetime, time
 from models.product import Product
 from database import get_db
 from models.order import Order
-from models.user import User
+from models.user import UserInfo
 from schemas.order import OrderCreate, OrderResponse
 
 # 🔥 방금 만든 요리사(Service)와 문지기(Dependency) 호출!
@@ -54,7 +54,7 @@ async def get_orders(
 async def delete_orders(
     order_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user) 
+    current_user: UserInfo = Depends(get_current_user) 
 ):
     order = db.get(Order, order_id)
     if not order:

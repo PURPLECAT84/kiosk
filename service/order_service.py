@@ -10,14 +10,14 @@ from models.order import Order
 from models.order_item import OrderItem
 from models.product import Product
 from schemas.order import OrderCreate
-from core.security import TOSS_SECREET_KEY
+from core.security import TOSS_SECRET_KEY
 
 async def create_order_transaction(db: Session, order_data: OrderCreate) -> Order:
     """
     [요리사] 결제 승인 및 DB 저장(영수증+장바구니) 트랜잭션을 한 번에 처리합니다.
     """
     # [1단계] 토스페이먼츠 결제 승인 (Mock)
-    auth_string = f"{TOSS_SECREET_KEY}:"
+    auth_string = f"{TOSS_SECRET_KEY}:"
     encode_auth = base64.b64encode(auth_string.encode()).decode()
     headers = {
         "Authorization" : f"Basic {encode_auth}",

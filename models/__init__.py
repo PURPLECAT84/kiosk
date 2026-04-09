@@ -1,4 +1,4 @@
-from .user import User
+from .user import UserInfo
 from .store import Store
 from .shelve import Shelve
 from .category import Category

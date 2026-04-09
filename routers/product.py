@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from database import get_db
 from models.store import Store
-from models.user import User
+from models.user import UserInfo, UserRole
 from models.category import Category
 from models.product import Product
 from schemas.product import ProductCreate, ProductResponse,ProductUpdate
@@ -19,13 +19,13 @@ from core.dependency import get_current_user
 
 router = APIRouter()
 
-AutherList = ["master" , "dev"]
+AutherList = [UserRole.MASTER, UserRole.DEV]
 
 @router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED, summary="상품등록")
 async def upload_product(
     upload : ProductCreate,
     db : Session = Depends(get_db),
-    uploader : User = Depends(get_current_user)
+    uploader : UserInfo = Depends(get_current_user)
     
 ):
     # 1. 카테고리 확인 및 정보 역추적
@@ -36,7 +36,7 @@ async def upload_product(
 
     # 2. 권한 확인 (카테고리가 알고 있는 store_id를 통해 매장 점주인지 확인)
     target_store = db.get(Store, target_category.store_id)
-    if uploader.authority not in AutherList and uploader.id != target_store.user_id:
+    if uploader.role not in AutherList and uploader.id != target_store.user_id:
         raise HTTPException(status_code=403, detail="본인 매장에만 상품을 업로드 할 수 있습니다.")
     
     # 3. 중복 확인 (같은 매대 안에서 이름이 겹치는지 확인)
@@ -74,7 +74,7 @@ async def upload_product(
 async def read_product_list(
     store_id : uuid.UUID,
     db: Session = Depends(get_db),
-    current_user : User = Depends(get_current_user)):
+    current_user : UserInfo = Depends(get_current_user)):
     
     #매장찾기
     target_store = db.get(Store, store_id)
@@ -83,7 +83,7 @@ async def read_product_list(
     
     #권한체크
 
-    if current_user.authority not in AutherList and current_user.id != target_store.user_id:
+    if current_user.role not in AutherList and current_user.id != target_store.user_id:
         raise HTTPException(status_code=403, detail="본인 매장 상품만 조회 할 수 있습니다.")
 
     products = db.scalars(select(Product).where(Product.store_id == store_id)).all()
@@ -96,7 +96,7 @@ async def update_product(
     product_id : uuid.UUID, # ✅ URL 변수명과 일치시킴
     update_data : ProductUpdate,
     db : Session = Depends(get_db),
-    current_user : User = Depends(get_current_user)
+    current_user : UserInfo = Depends(get_current_user)
 ):
     # 1. 매장 확인
     target_store = db.get(Store, store_id)
@@ -109,7 +109,7 @@ async def update_product(
         raise HTTPException(status_code=404, detail="해당 상품을 찾을 수 없습니다.")
     
     # 3. 권한 확인
-    if current_user.authority not in AutherList and current_user.id != target_store.user_id:
+    if current_user.role not in AutherList and current_user.id != target_store.user_id:
         raise HTTPException(status_code=403, detail="본인 매장 상품만 수정할 수 있습니다.")
 
     # 4. 이름 업데이트 시 중복 검사 (최적화 💡)
@@ -151,7 +151,7 @@ async def delete_product(
     store_id : uuid.UUID,
     product_id : uuid.UUID, # ✅ URL 변수명과 일치시킴
     db : Session = Depends(get_db),
-    current_user : User = Depends(get_current_user)
+    current_user : UserInfo = Depends(get_current_user)
 ):
     # 1. 매장 확인
     target_store = db.get(Store, store_id)
@@ -164,7 +164,7 @@ async def delete_product(
         raise HTTPException(status_code=404, detail="해당 상품을 찾을 수 없습니다.")
     
     # 3. 권한 확인
-    if current_user.authority not in AutherList and current_user.id != target_store.user_id:
+    if current_user.role not in AutherList and current_user.id != target_store.user_id:
         raise HTTPException(status_code=403, detail="본인 매장 상품만 삭제할 수 있습니다.")
 
     # 4. 삭제
@@ -179,7 +179,7 @@ async def update_product_status(
     product_id: uuid.UUID,
     body: ProductStatusUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: UserInfo = Depends(get_current_user)
 ):
     product = db.get(Product, product_id)
     if not product:
@@ -208,7 +208,7 @@ async def update_product_status(
 @router.post("/image", summary="상품 이미지 단일 업로드")
 async def upload_product_image(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user)
+    current_user: UserInfo = Depends(get_current_user)
 ):
     if file.size > 2 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="이미지 파일 크기는 2MB 이하여야 합니다.")
