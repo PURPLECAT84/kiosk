@@ -43,6 +43,11 @@ app = FastAPI(title="Kiosk Admin Center", description="키오스크 관리자 �
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+partner_ui_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../kiosk_partner"))
+if os.path.exists(partner_ui_dir):
+    app.mount("/js", StaticFiles(directory=os.path.join(partner_ui_dir, "js")), name="partner_js")
+    app.mount("/css", StaticFiles(directory=os.path.join(partner_ui_dir, "css")), name="partner_css")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # 모든 주소에서 내 API에 접근하는 것을 허용 (실무에선 특정 도메인만 넣습니다)
@@ -63,7 +68,9 @@ app.include_router(social_login.auth_router)
 from fastapi.responses import RedirectResponse, FileResponse
 @app.get("/")
 def read_root():
-    return FileResponse("index.html")
+    if os.path.exists(partner_ui_dir):
+        return FileResponse(os.path.join(partner_ui_dir, "index.html"))
+    return{"message" : "Partner UI not found at ../kiosk_partner"}
 
 
 
