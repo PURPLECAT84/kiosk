@@ -1,8 +1,11 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from dotenv import load_dotenv
+import os
 
-DB_URL = "postgresql://postgres.wmrnknlikvcohczmyvpb:PGHwIpn08gBh9gi8@aws-1-ap-south-1.pooler.supabase.com:6543/postgres"
-# supabase 비번 : PGHwIpn08gBh9gi8
+load_dotenv()
+
+DB_URL = os.getenv("DB_URL")
 
 engine = create_engine(DB_URL, pool_pre_ping = True)
 #pool_pre_ping = True : DB 와의 연결 전 매번 연결 상태 체크 실행

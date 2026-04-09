@@ -6,7 +6,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from typing import List
 
 from database import get_db
-from models.user import User
+from models.user import UserInfo, UserRole
 from schemas.user import UserCreate, UserResponse, Token, UserUpdate, UserPasswordUpdate, UserDelete
 from core.security import get_password_hash, verify_password, create_access_token
 # 🔥 [핵심] 아까 만든 문지기를 여기서 불러옵니다!
@@ -17,7 +17,7 @@ router = APIRouter()
 """===================== 토큰 발급 (로그인) ============================"""
 @router.post("/login", response_model=Token)
 def token_access(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    stmt = select(User).where(User.email == form_data.username)
+    stmt = select(UserInfo).where(UserInfo.email == form_data.username)
     user = db.execute(stmt).scalars().first()
    
     if not user or not verify_password(form_data.password, user.password):
@@ -32,19 +32,19 @@ def token_access(form_data: OAuth2PasswordRequestForm = Depends(), db: Session =
 
 """===================== 내 정보 조회 ============================"""
 @router.get("/me", response_model=UserResponse, summary="회원검증")
-def read_users_me(current_user: User = Depends(get_current_user)):
+def read_users_me(current_user: UserInfo = Depends(get_current_user)):
     return current_user
 
 """===================== 회원 가입 ============================"""
 @router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED, summary="회원가입")
 def create_user(user: UserCreate, db: Session = Depends(get_db)):
-    stmt = select(User).where(User.email == user.email)
+    stmt = select(UserInfo).where(UserInfo.email == user.email)
     if db.execute(stmt).scalars().first():
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="이미 존재하는 이메일입니다")
     
     user_data = user.model_dump()
     user_data["password"] = get_password_hash(user_data["password"])
-    new_user = User(**user_data)
+    new_user = UserInfo(**user_data)
     
     db.add(new_user)
     db.commit()
@@ -56,17 +56,17 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
 async def read_user(
     skip: int = 0, limit: int = 10, 
     name: str | None = None, email: str | None = None,
-    current_user: User = Depends(get_current_user), # 🔒 권한 검사
+    current_user: UserInfo = Depends(get_current_user), # 🔒 권한 검사
     db: Session = Depends(get_db)
 ):
-    if current_user.authority not in ["master", "dev"]:
+    if current_user.role not in [UserRole.MASTER, UserRole.DEV]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="회원조회 권한이 없습니다")
 
-    stmt = select(User)
+    stmt = select(UserInfo)
     if name: 
-        stmt = stmt.where(User.name.contains(name))
+        stmt = stmt.where(UserInfo.name.contains(name))
     if email: 
-        stmt = stmt.where(User.email.contains(email))
+        stmt = stmt.where(UserInfo.email.contains(email))
     
     stmt = stmt.offset(skip).limit(limit)
     return db.execute(stmt).scalars().all()
@@ -76,11 +76,10 @@ async def read_user(
 async def update_user_profile(
     body: UserUpdate, 
     db: Session = Depends(get_db), 
-    current_user: User = Depends(get_current_user) # 🔒 권한 검사
+    current_user: UserInfo = Depends(get_current_user) # 🔒 권한 검사
 ):
     if body.name: current_user.name = body.name
     if body.phone: current_user.phone = body.phone
-    if body.address: current_user.address = body.address 
 
     db.commit()
     db.refresh(current_user)
@@ -91,7 +90,7 @@ async def update_user_profile(
 async def update_password(
     body: UserPasswordUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user) # 🔒 권한 검사
+    current_user: UserInfo = Depends(get_current_user) # 🔒 권한 검사
 ):
     if not verify_password(body.current_password, current_user.password):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="현재 비밀번호가 일치하지 않습니다")
@@ -110,7 +109,7 @@ async def update_password(
 async def delete_user(
     confirm: UserDelete,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user) # 🔒 권한 검사
+    current_user: UserInfo = Depends(get_current_user) # 🔒 권한 검사
 ):
     if not verify_password(confirm.password, current_user.password):
           raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="비밀번호가 일치하지 않습니다")

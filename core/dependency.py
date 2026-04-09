@@ -7,7 +7,7 @@ import jwt
 from jwt.exceptions import InvalidTokenError
 
 from database import get_db
-from models.user import User
+from models.user import UserInfo
 from core.security import SECRET_KEY, ALGORITHM
 
 # 🔒 스웨거 자물쇠 생성 (로그인 주소 명시)
@@ -16,7 +16,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/users/login")
 def get_current_user(
     token: str = Depends(oauth2_scheme), 
     db: Session = Depends(get_db)
-) -> User:
+) -> UserInfo:
     """
     [보안 문지기] 토큰을 해독하여 정상적인 유저인지 확인하고 정보를 반환합니다.
     """
@@ -36,7 +36,7 @@ def get_current_user(
         raise credentials_exception
 
     # DB에서 유저 조회
-    stmt = select(User).where(User.email == email)
+    stmt = select(UserInfo).where(UserInfo.email == email)
     user = db.execute(stmt).scalars().first()
 
     if user is None:
