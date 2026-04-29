@@ -8,6 +8,7 @@
 3. **백엔드 성장 파트너:** FastAPI 개발 시 **상세한 주석과 원리 설명**을 통해 멘토링을 제공합니다.
 
 ## 🚀 기획안 요약 (Phase 1 MVP)
+(상세 기획안은 [docs/MOKI_PROPOSAL.md](file:///c:/CODES/kiosk/docs/MOKI_PROPOSAL.md) 파일을 참고하세요.)
 - **목표:** 중고 키오스크 범용 OS/App 보급 (SaaS/렌탈)
 - **Tech:** Python 3.12, FastAPI, Supabase, Vite, Flutter, PortOne V2
 - **핵심 기능:** 상품/카테고리 CRUD, 포트원 연동 오프라인 결제, 관리자 대시보드
@@ -24,5 +25,5 @@
 
 ## 💬 Antigravity 연결 프롬프트 (새 대화 시작 시 사용)
 > 기존에 진행하던 MOKI 프로젝트를 이어서 할거야.
-> 프로젝트 내의 `docs/MOKI_STATUS.md` 파일을 먼저 읽고, 우리의 핵심 개발 원칙 3가지와 현재 진행 상황을 파악해줘.
+> 먼저 `docs/MOKI_PROPOSAL.md` (전체 기획안) 파일과 `docs/MOKI_STATUS.md` (상태 보드) 파일을 순서대로 읽고, 우리의 비즈니스 로직과 핵심 개발 원칙을 완벽히 파악해줘.
 > 파악이 완료되면, "진행 대기 중인 다음 목표" 중에서 오늘 시작할 코딩 작업을 나에게 제안해줘.
