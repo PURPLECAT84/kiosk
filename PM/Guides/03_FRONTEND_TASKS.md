@@ -20,6 +20,9 @@
 - `[ ]` [Web] 외식형(Type B) / 상품판매형(Type A) 매장 타입 스위칭 토글 UI 구현
 - `[ ]` [App] 하단 고정 장바구니 영역 UI 및 리플 애니메이션 뼈대 구축
 - `[ ]` [App] ESC/POS 범용 프린터 통신 추상화 클래스(인터페이스) 설계
+- `[x]` [Web] (20260508-1) Vite Proxy(`vite.config.ts`) 적용 및 프론트엔드 API 호출 상대경로 리팩토링 완료
+- `[x]` [Web] (20260508-1) React Router 기반 로그인 상태 확인 시 AuthContext 비동기 지연에 의한 튕김(Race Condition) 방어 처리 완료 (`isLoading` 동기 갱신)
+- `[x]` [Web] (20260508-1) React Strict Mode에 의한 소셜 로그인 토큰 중복 발급 및 DB 에러 방지 처리 완료 (`useRef` 도입)
 
 ---
 *진행 방법:*

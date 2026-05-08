@@ -33,7 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (token) {
       setIsLoading(true);
-      fetch('http://127.0.0.1:8000/users/me', {
+      fetch('/users/me', {
         headers: {
           Authorization: `Bearer ${token}`
         }
@@ -59,6 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = (newToken: string) => {
     localStorage.setItem('token', newToken);
     setToken(newToken);
+    setIsLoading(true); // 즉각적인 로딩 상태 진입으로 깜빡임/튕김 방지
   };
 
   const logout = () => {

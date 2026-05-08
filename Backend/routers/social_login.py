@@ -58,7 +58,7 @@ async def social_login(provider: str):
         res = supabase.auth.sign_in_with_oauth({
             "provider": provider,
             "options": {
-                "redirect_to": "http://127.0.0.1:8000/" 
+                "redirect_to": "http://localhost:5173/callback" 
             }
         })
 
@@ -98,6 +98,7 @@ async def exchange_supabase_token(request: TokenExchangeRequest, db: Session = D
             user = UserInfo(
                 id=uuid.UUID(user_resp.user.id),
                 email=email,
+                password="SOCIAL_LOGIN", # 소셜 로그인은 자체 비밀번호를 사용하지 않음
                 name=f"User_{email.split('@')[0]}",
                 phone="010-0000-0000",
                 role=UserRole.STAFF
