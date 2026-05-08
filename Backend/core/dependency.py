@@ -30,6 +30,7 @@ def get_current_user(
         # 토큰 포장지 뜯기
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str | None = payload.get("sub")
+        provider: str | None = payload.get("provider", "email") # 로그인 수단 추출
         if email is None:
             raise credentials_exception
     except InvalidTokenError:
@@ -41,6 +42,9 @@ def get_current_user(
 
     if user is None:
         raise credentials_exception
+    
+    # 동적 속성으로 로그인 수단을 주입 (Pydantic 변환 시 사용)
+    setattr(user, "login_provider", provider)
     
     return user
 

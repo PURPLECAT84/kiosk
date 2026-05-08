@@ -16,6 +16,13 @@ export default function SignupPage() {
     setErrorMsg('');
     setSuccessMsg('');
 
+    // 비밀번호 정규식 검사 (8자리 이상, 영문, 숫자, 특수문자 포함)
+    const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[^a-zA-Z0-9\s]).{8,}$/;
+    if (!passwordRegex.test(password)) {
+      setErrorMsg('비밀번호는 특수문자, 영문, 숫자를 조합하여 입력해주세요.');
+      return;
+    }
+
     const payload = {
       email,
       password,
@@ -85,7 +92,7 @@ export default function SignupPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-12 pr-4 py-3 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none"
-                  placeholder="비밀번호 8자리 이상"
+                  placeholder="영문, 숫자, 특수문자 포함 8자 이상"
                   required
                 />
               </div>

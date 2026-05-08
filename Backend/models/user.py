@@ -19,6 +19,7 @@ class UserRole(str, enum.Enum):
     MASTER = "MASTER" # 관리자
     MANAGER = "MANAGER" # 점주
     STAFF = "STAFF" # 직원
+    NONE = "NONE" # 권한 없음
 
 class UserStatus(str, enum.Enum):
     PENDING = "PENDING" # 승인 대기
@@ -41,7 +42,7 @@ class UserInfo(Base):
 
     """회원 가입 시 필수 아님, HEAD, MASTER와 같은 상위 권한자가 매장 등록(활성화) 시 수정 및 입력"""
     # Enum 적용
-    role: Mapped[UserRole] = mapped_column(default=UserRole.STAFF) #권한
+    role: Mapped[UserRole] = mapped_column(default=UserRole.NONE) #권한
     status: Mapped[UserStatus] = mapped_column(default=UserStatus.PENDING) #상태
     store_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("store_info.id", ondelete="SET NULL")) #소속 매장아이디 (복수가능)
    

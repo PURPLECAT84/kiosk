@@ -101,14 +101,15 @@ async def exchange_supabase_token(request: TokenExchangeRequest, db: Session = D
                 password="SOCIAL_LOGIN", # 소셜 로그인은 자체 비밀번호를 사용하지 않음
                 name=f"User_{email.split('@')[0]}",
                 phone="010-0000-0000",
-                role=UserRole.STAFF
+                role=UserRole.NONE
             )
             db.add(user)
             db.commit()
             db.refresh(user)
             
         # 4. 우리 백엔드용 JWT 발급
-        access_token = create_access_token(data={"sub": user.email})
+        provider = user_resp.user.app_metadata.get("provider", "social")
+        access_token = create_access_token(data={"sub": user.email, "provider": provider})
         return {"access_token": access_token, "token_type": "bearer"}
         
     except Exception as e:

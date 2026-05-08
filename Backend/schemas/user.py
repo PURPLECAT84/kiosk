@@ -1,7 +1,13 @@
 from pydantic import BaseModel, EmailStr, ConfigDict, Field, field_validator, ValidationInfo #EmailStr 을 사용하기 위해선 email-validator 설치 필요
 from datetime import datetime
 import uuid
+import re
 from models.user import UserRole, UserStatus
+
+def validate_password_complexity(v: str) -> str:
+    if len(v) < 8 or not re.search(r'[A-Za-z]', v) or not re.search(r'\d', v) or not re.search(r'[^A-Za-z0-9\s]', v):
+        raise ValueError("비밀번호는 특수문자, 영문, 숫자를 조합하여 입력해주세요.")
+    return v
 
 class UserCreate(BaseModel):
     email : EmailStr # 이메일
@@ -9,20 +15,33 @@ class UserCreate(BaseModel):
     name : str # 이름
     phone : str | None = None # 전화번호
 
+    @field_validator("password")
+    @classmethod
+    def validate_create_password(cls, v: str) -> str:
+        return validate_password_complexity(v)
+
 class UserUpdate(BaseModel):
     name: str | None = None # 이름
     phone: str | None = None # 전화번호
 
 class UserPasswordUpdate(BaseModel):
-    current_password: str = Field(...,description="현재 비밀번호")
-    new_password : str = Field(..., min_length = 4, description="새 비밀번호")
-    new_password_check: str = Field(...,min_length = 4, description="새 비밀번호 확인")
+    current_password: str = Field(..., description="현재 비밀번호")
+    new_password: str = Field(..., min_length=8, description="새 비밀번호")
+    new_password_check: str = Field(..., min_length=8, description="새 비밀번호 확인")
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        # 복잡도 검사는 new_password에서만 수행
+        return validate_password_complexity(v)
 
     @field_validator("new_password_check")
     @classmethod
     def password_match(cls, v: str, info: ValidationInfo) -> str:
-        # info.data 딕셔너리에 이전에 검증된 필드들이 담겨 있습니다.
-        if "new_password" in info.data and v != info.data["new_password"]:
+        # new_password가 복잡도 검증을 통과하지 못하면 info.data에 없을 수 있음
+        # 이 경우 일치 여부만 확인하면 됨 (복잡도는 new_password에서 이미 처리됨)
+        new_pw = info.data.get("new_password")
+        if new_pw is not None and v != new_pw:
             raise ValueError("새 비밀번호가 일치하지 않습니다")
         return v
     
@@ -38,6 +57,7 @@ class UserResponse(BaseModel):
     status : UserStatus # 상태 (PENDING, ACTIVE, BANNED)
     store_id : uuid.UUID | None = None # 소속 매장아이디 (복수가능한 경우도 고려)
     created_at : datetime # 가입일, 서버시간 기준
+    login_provider: str | None = "email" # 이메일, 카카오, 구글 등 현재 로그인 수단
 
     model_config = ConfigDict(from_attributes = True) # SQLAlchemy 모델(DB 객체)을 Pydantic 모델로 변환 허용
 
@@ -49,3 +69,21 @@ class UserLogin(BaseModel):
 class Token(BaseModel):
     access_token : str # 발급된 엑세스 토큰
     token_type : str # 토큰 타입 (예: bearer)
+
+# ======================== 아이디 찾기 ========================
+class FindIdRequest(BaseModel):
+    name: str = Field(..., description="이름")
+    phone: str = Field(..., description="전화번호")
+
+class FindIdResponse(BaseModel):
+    masked_email: str  # 마스킹된 이메일 (예: pm*****@naver.com)
+
+# ======================== 비밀번호 재설정 ========================
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr = Field(..., description="가입한 이메일")
+    name: str = Field(..., description="이름")
+    phone: str = Field(..., description="전화번호")
+
+class ResetPasswordResponse(BaseModel):
+    temp_password: str  # 화면에 노출할 임시 비밀번호
+    message: str

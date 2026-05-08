@@ -17,6 +17,11 @@
   - _완료 (2026-04-29): database.py 세션 통합, main.py 정돈 및 멘토링 주석 보강 완료. 모델/라우터 2.0 스펙 점검 완료._
 - [x] (20260508-1) Vite Proxy 지원을 위한 소셜 로그인 Redirect URI 경로 변경 (`/auth/callback` -> `/callback`)
 - [x] (20260508-1) 소셜 계정 최초 연동 시 `user_info` 테이블의 `password` 필드 Not Null 제약조건 예외처리 완료 (`SOCIAL_LOGIN` 더미 암호 삽입)
+- [x] (20260508-2) JWT 토큰에 `provider` 클레임 추가 (이메일/카카오/구글 구분)
+- [x] (20260508-2) `POST /users/find-id` API 신설 (이름+전화번호 매칭 → 마스킹 이메일 반환)
+- [x] (20260508-2) `POST /users/reset-password` API 신설 (3중 매칭 → 임시 비밀번호 발급)
+- [x] (20260508-2) 비밀번호 복잡도 검증 로직 추가 (`validate_password_complexity`)
+- [x] (20260508-2) `UserRole.NONE` Enum 추가 및 신규 가입 기본 권한 변경
 
 ---
 

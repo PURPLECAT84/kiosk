@@ -87,6 +87,13 @@ export default function LoginPage() {
           >
             이메일로 로그인
           </button>
+
+          {/* 아이디/비밀번호 찾기 */}
+          <div className="flex justify-center space-x-4 text-base text-gray-500">
+            <Link to="/find-id" className="hover:text-[#7C3AED] transition-colors">아이디 찾기</Link>
+            <span className="text-gray-300">|</span>
+            <Link to="/find-password" className="hover:text-[#7C3AED] transition-colors">비밀번호 찾기</Link>
+          </div>
         </form>
 
         <div className="mt-8">

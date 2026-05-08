@@ -1,4 +1,6 @@
 # routers/user.py
+import secrets
+import string
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -7,7 +9,10 @@ from typing import List
 
 from database import get_db
 from models.user import UserInfo, UserRole
-from schemas.user import UserCreate, UserResponse, Token, UserUpdate, UserPasswordUpdate, UserDelete
+from schemas.user import (UserCreate, UserResponse, Token, UserUpdate, 
+                          UserPasswordUpdate, UserDelete,
+                          FindIdRequest, FindIdResponse,
+                          ResetPasswordRequest, ResetPasswordResponse)
 from core.security import get_password_hash, verify_password, create_access_token
 # 🔥 [핵심] 아까 만든 문지기를 여기서 불러옵니다!
 from core.dependency import get_current_user 
@@ -27,7 +32,7 @@ def token_access(form_data: OAuth2PasswordRequestForm = Depends(), db: Session =
             headers={"WWW-Authenticate": "Bearer"}
         )
     
-    access_token = create_access_token(data={"sub": user.email})
+    access_token = create_access_token(data={"sub": user.email, "provider": "email"})
     return {"access_token": access_token, "token_type": "bearer"}
 
 """===================== 내 정보 조회 ============================"""
@@ -117,3 +122,82 @@ async def delete_user(
     db.delete(current_user)
     db.commit()
     return None
+
+"""===================== 아이디 찾기 ========================"""
+@router.post("/find-id", response_model=FindIdResponse, summary="아이디(이메일) 찾기")
+async def find_user_id(body: FindIdRequest, db: Session = Depends(get_db)):
+    """
+    이름과 전화번호가 DB에 등록된 정보와 일치하면, 
+    이메일 앞 2자만 남기고 마스킹하여 반환합니다.
+    예) pmountain@naver.com → pm*******@naver.com
+    """
+    stmt = select(UserInfo).where(UserInfo.name == body.name, UserInfo.phone == body.phone)
+    user = db.execute(stmt).scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="입력하신 정보와 일치하는 계정이 없습니다."
+        )
+    
+    # 이메일 마스킹 처리
+    email = user.email
+    local, domain = email.split("@")
+    # 앞 2자리만 공개, 나머지는 * 처리
+    visible = local[:2]
+    masked = visible + ("*" * (len(local) - 2))
+    masked_email = f"{masked}@{domain}"
+
+    return FindIdResponse(masked_email=masked_email)
+
+
+"""===================== 비밀번호 초기화 ========================"""
+@router.post("/reset-password", response_model=ResetPasswordResponse, summary="비밀번호 초기화 (임시 비밀번호 발급)")
+async def reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """
+    이메일, 이름, 전화번호 3가지가 모두 일치하면 랜덤 임시 비밀번호를 생성하여 
+    DB를 업데이트하고 화면으로 반환합니다.
+    (상용화 버전에서는 화면 노출 대신 해당 이메일로 발송하도록 업그레이드 예정)
+    """
+    stmt = select(UserInfo).where(
+        UserInfo.email == body.email,
+        UserInfo.name == body.name,
+        UserInfo.phone == body.phone
+    )
+    user = db.execute(stmt).scalars().first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="입력하신 이메일, 이름, 전화번호 정보가 일치하지 않습니다."
+        )
+
+    # 소셜 로그인 전용 계정 예외 처리
+    if user.password == "SOCIAL_LOGIN":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="소셜 로그인(카카오/구글) 연동 계정은 비밀번호 재설정이 불가합니다."
+        )
+    
+    # 임시 비밀번호 생성: 영문(대소) + 숫자 + 특수문자 조합, 12자리
+    alphabet = string.ascii_letters + string.digits + "!@#$%"
+    temp_password = (
+        secrets.choice(string.ascii_uppercase) +
+        secrets.choice(string.ascii_lowercase) +
+        secrets.choice(string.digits) +
+        secrets.choice("!@#$%") +
+        "".join(secrets.choice(alphabet) for _ in range(8))
+    )
+    # 순서 무작위 섞기
+    temp_list = list(temp_password)
+    secrets.SystemRandom().shuffle(temp_list)
+    temp_password = "".join(temp_list)
+
+    # DB 업데이트
+    user.password = get_password_hash(temp_password)
+    db.commit()
+    
+    return ResetPasswordResponse(
+        temp_password=temp_password,
+        message="임시 비밀번호가 발급되었습니다. 로그인 후 반드시 비밀번호를 변경해 주세요."
+    )
