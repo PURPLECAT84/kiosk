@@ -1,10 +1,20 @@
 {
 	"folders": [
 		{
+			"name": "1. MOKI Root",
 			"path": "."
 		},
 		{
-			"path": "../KIOSK_PARTNER"
+			"name": "2. Backend (FastAPI)",
+			"path": "Backend"
+		},
+		{
+			"name": "3. Partner Center (React)",
+			"path": "Partnercenter"
+		},
+		{
+			"name": "4. PM (문서/기획/스크립트)",
+			"path": "PM"
 		}
 	],
 	"settings": {}

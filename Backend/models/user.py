@@ -30,8 +30,9 @@ class UserInfo(Base):
     __tablename__ = "user_info"
     """회원 가입 / 로그인 시 필수(자동) 입력"""
     # mapped_column을 사용하여 더 직관적으로 정의
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True) #회원 고유아이디
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4) #회원 고유아이디
     email: Mapped[str] = mapped_column(String, unique=True, nullable=False) #이메일
+    password: Mapped[str] = mapped_column(String(255), nullable=False) #비밀번호 (해시)
     name: Mapped[str] = mapped_column(String(50), nullable=False) #이름
     phone: Mapped[str] = mapped_column(String(20)) #전화번호
     created_at: Mapped[datetime] = mapped_column(

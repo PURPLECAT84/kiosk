@@ -53,16 +53,13 @@ app.add_middleware(
 # 5-1. 백엔드 자체 정적 파일 (예: 업로드된 이미지)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# 5-2. 파트너센터 React 빌드 파일 서빙 (kiosk_partner 폴더가 있을 경우)
-partner_ui_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../kiosk_partner"))
+# 5-2. 파트너센터 React 빌드 파일 서빙 (../Partnercenter/dist 폴더 기준)
+partner_ui_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../Partnercenter/dist"))
 if os.path.exists(partner_ui_dir):
-    js_path = os.path.join(partner_ui_dir, "js")
-    css_path = os.path.join(partner_ui_dir, "css")
+    assets_path = os.path.join(partner_ui_dir, "assets")
     
-    if os.path.exists(js_path):
-        app.mount("/js", StaticFiles(directory=js_path), name="partner_js")
-    if os.path.exists(css_path):
-        app.mount("/css", StaticFiles(directory=css_path), name="partner_css")
+    if os.path.exists(assets_path):
+        app.mount("/assets", StaticFiles(directory=assets_path), name="partner_assets")
 
 # 6. 라우터 연결 (API 엔드포인트 모듈화)
 # app.include_router()를 통해 기능별로 분리된 파일들을 하나의 앱으로 합쳐줍니다.
