@@ -11,14 +11,7 @@ sys.path.append(os.getcwd())
 
 from database import Base    # 우리 프로젝트의 Base 가져오기
 
-# 🔥 [수정된 부분] 과거의 models.models는 지우고, 쪼개진 파일들에서 하나씩 예쁘게 불러옵니다.
-from models.user import User
-from models.store import Store
-from models.shelve import Shelve
-from models.category import Category
-from models.product import Product
-from models.order import Order
-from models.order_item import OrderItem
+from models import UserInfo, Store, Kiosk, Shelve, Category, Product, Order, OrderItem
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

@@ -25,7 +25,7 @@ from fastapi.responses import FileResponse
 
 from database import engine, Base
 import models
-from routers import user, store, shelve, category, product, order, statistics, social_login
+from routers import user, store, kiosk, kiosk_client, shelve, category, product, order, statistics, social_login
 
 # 1. DB 테이블 자동 생성
 # 앱이 시작될 때 models에 정의된 스키마를 바탕으로 DB에 테이블이 없으면 자동으로 생성해줍니다.
@@ -65,6 +65,8 @@ if os.path.exists(partner_ui_dir):
 # app.include_router()를 통해 기능별로 분리된 파일들을 하나의 앱으로 합쳐줍니다.
 app.include_router(user.router, prefix="/users", tags=["Users"])
 app.include_router(store.router, prefix="/store", tags=["Stores"])
+app.include_router(kiosk.router, prefix="/kiosks", tags=["Kiosks"])
+app.include_router(kiosk_client.router, prefix="/kiosk_client", tags=["Kiosk Client"])
 app.include_router(shelve.router, prefix="/shelves", tags=["Shelves"])
 app.include_router(category.router, prefix="/categories", tags=["Categories"])
 app.include_router(product.router, prefix="/products", tags=["Products"])

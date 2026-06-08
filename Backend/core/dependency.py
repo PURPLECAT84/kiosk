@@ -49,3 +49,21 @@ def get_current_user(
     return user
 
 
+from models.user import UserRole
+from typing import List
+
+def require_roles(allowed_roles: List[UserRole]):
+    """
+    [역할 기반 권한 검증기] 특정 역할 목록에 있는 사용자만 API에 접근할 수 있도록 제한합니다.
+    """
+    def dependency(current_user: UserInfo = Depends(get_current_user)) -> UserInfo:
+        if current_user.role not in allowed_roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="해당 API를 호출할 권한이 없습니다."
+            )
+        return current_user
+    return dependency
+
+
+

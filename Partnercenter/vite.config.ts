@@ -19,6 +19,14 @@ export default defineConfig({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true
       },
+      '/kiosks': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true
+      },
+      '/kiosk_client': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true
+      },
       '/shelves': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true

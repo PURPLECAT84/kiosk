@@ -34,8 +34,30 @@ async def create_order_transaction(db: Session, order_data: OrderCreate) -> Orde
         print("토스 결제 승인 완료")
 
     try:
+        # [0단계] 매장 정보 조회하여 주문번호 로직 결정
+        from models.store import Store
+        import random
+        
+        store = db.get(Store, order_data.store_id)
+        if not store:
+            raise HTTPException(status_code=404, detail="매장을 찾을 수 없습니다.")
+            
+        order_no = None
+        if store.type == "Restaurant" and order_data.order_no:
+            # 외식형(Restaurant) 결제 프로세스: 입력받은 휴대폰 번호(하이픈 제외 숫자)를 그대로 대체 적재
+            digits = "".join(c for c in order_data.order_no if c.isdigit())
+            if len(digits) >= 10:
+                order_no = digits
+                
+        if not order_no:
+            # 일반 판매형(Store) 또는 번호 미입력 시: YYMMDD + 6자리 랜덤 숫자
+            current_date = datetime.now().strftime("%y%m%d")
+            random_digits = "".join(random.choice("0123456789") for _ in range(6))
+            order_no = current_date + random_digits
+
         # [2단계] 영수증(Order) 뼈대 만들기
         new_order = Order(
+            order_no=order_no,
             store_id=order_data.store_id,
             total_amount=order_data.total_amount,
             payment_method=order_data.payment_method,
@@ -62,16 +84,17 @@ async def create_order_transaction(db: Session, order_data: OrderCreate) -> Orde
                 product.is_active = False # 시간이 지났으므로 영구 미판매 처리!
                 raise HTTPException(status_code=400, detail=f"[{product.name}] 상품은 판매 기한이 만료되었습니다.")
             
-            # 🔥 재고가 충분한가?
-            if product.stock < item.quantity:
-                raise HTTPException(status_code=400, detail=f"[{product.name}] 재고가 부족합니다. (남은 수량: {product.stock}개)")
+            # 🔥 재고가 충분한가? (재고 관리 활성화 시에만 체크)
+            if getattr(product, "stock_managed", True):
+                if product.stock < item.quantity:
+                    raise HTTPException(status_code=400, detail=f"[{product.name}] 재고가 부족합니다. (남은 수량: {product.stock}개)")
 
-            # ✅ 모든 검사를 통과했다면 재고를 깎습니다!
-            product.stock -= item.quantity
-            
-            # (옵션) 만약 재고가 0이 되었다면 자동으로 미판매 처리!
-            if product.stock == 0:
-                product.is_active = False
+                # ✅ 모든 검사를 통과했다면 재고를 깎습니다!
+                product.stock -= item.quantity
+                
+                # (옵션) 만약 재고가 0이 되었다면 자동으로 미판매 처리!
+                if product.stock == 0:
+                    product.is_active = False
 
             # 장바구니에 담기
             order_item = OrderItem(

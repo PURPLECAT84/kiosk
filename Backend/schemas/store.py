@@ -1,27 +1,29 @@
-from pydantic import BaseModel, EmailStr, ConfigDict
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 import uuid
 
 class StoreCreate(BaseModel):
-
-    name : str
-    address : str
-    type : str | None = None
-
-
+    name: str
+    address: str
+    type: str = "Store"
+    owner_name: str | None = None
 
 class StoreUpdate(BaseModel):
+    name: str | None = None
+    address: str | None = None
+    type: str | None = None
+    status: str | None = None
+    owner_name: str | None = None
 
-    name : str | None = None
-    address : str | None = None
-    type : str
-    
 class StoreResponse(BaseModel):
-
     id: uuid.UUID
-    name : str
+    code: str
+    name: str
     address: str
-    type : str
-    created_date : datetime
+    type: str
+    owner_name: str | None
+    status: str
+    created_date: datetime
+    kiosk_count: int = 0
 
-    model_config = ConfigDict(from_attributes = True)
+    model_config = ConfigDict(from_attributes=True)

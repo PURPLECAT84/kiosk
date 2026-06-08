@@ -1,11 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-// 로그인 시 서버에서 주는 응답 (schemas/user.py 참조)
-interface TokenResponse {
-  access_token: string;
-  token_type: string;
-}
-
 // 사용자 정보
 interface User {
   id: string;
@@ -13,6 +7,7 @@ interface User {
   name: string;
   role: string;
   login_provider?: string;
+  phone?: string | null;
 }
 
 interface AuthContextType {
