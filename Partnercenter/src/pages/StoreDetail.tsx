@@ -185,11 +185,11 @@ export default function StoreDetail() {
     <div className="p-8 max-w-7xl mx-auto space-y-8 pb-20">
       {/* 뒤로가기 버튼 */}
       <button
-        onClick={() => navigate('/stores')}
+        onClick={() => navigate(canManageStore ? '/stores' : '/')}
         className="flex items-center space-x-2 text-gray-600 hover:text-[#7C3AED] font-semibold transition-colors cursor-pointer"
       >
         <ArrowLeft size={20} />
-        <span>매장 목록으로</span>
+        <span>{canManageStore ? '매장 목록으로' : '대시보드로 돌아가기'}</span>
       </button>
 
       {/* 상단: 매장 기본정보 */}

@@ -14,6 +14,7 @@ import string
 
 router = APIRouter()
 allowed_roles = [UserRole.DEV, UserRole.HEAD, UserRole.MASTER]
+view_roles = [UserRole.DEV, UserRole.HEAD, UserRole.MASTER, UserRole.MANAGER]
 
 def generate_store_code(db: Session) -> str:
     """ST + 4자리 알파벳 대문자 및 숫자 조합의 고유코드 생성"""
@@ -63,7 +64,7 @@ async def read_store(
     limit: int = 100, 
     name: str | None = None, 
     db: Session = Depends(get_db),
-    current_user: UserInfo = Depends(require_roles(allowed_roles))
+    current_user: UserInfo = Depends(require_roles(view_roles))
 ):
     # Outerjoin을 활용해 각 매장의 키오스크 개수를 집계합니다.
     stmt = (
@@ -71,6 +72,10 @@ async def read_store(
         .outerjoin(Kiosk, Store.id == Kiosk.store_id)
         .group_by(Store.id)
     )
+
+    # MANAGER 권한인 경우 본인 매장만 필터링
+    if current_user.role == UserRole.MANAGER:
+        stmt = stmt.where(Store.user_id == current_user.id)
 
     if name:
         stmt = stmt.where(Store.name.contains(name))
@@ -91,7 +96,7 @@ async def read_store(
 async def get_store_detail(
     store_id: uuid.UUID,
     db: Session = Depends(get_db),
-    current_user: UserInfo = Depends(require_roles(allowed_roles))
+    current_user: UserInfo = Depends(require_roles(view_roles))
 ):
     # 단건 조회 시에도 키오스크 개수를 구합니다.
     stmt = (
@@ -105,6 +110,11 @@ async def get_store_detail(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="매장을 찾을 수 없습니다")
     
     store, kiosk_count = result
+    
+    # MANAGER 권한인 경우 본인 매장인지 검증
+    if current_user.role == UserRole.MANAGER and store.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="본인 매장 정보만 열람할 수 있습니다")
+
     setattr(store, "kiosk_count", kiosk_count)
     return store
 

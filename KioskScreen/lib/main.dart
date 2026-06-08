@@ -3,8 +3,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('ko', null);
   runApp(const KioskApp());
 }
 
@@ -19,7 +22,7 @@ class KioskApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0text7C3AED),
+          seedColor: const Color(0xff7C3AED),
           primary: const Color(0xff7C3AED),
           background: const Color(0xffF3F4F6),
         ),
@@ -292,8 +295,9 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
         }
       } catch (e) {
         // 백엔드 연결 불가 시에도 강제 가상 결제 성공 처리 (Kiosk UX 보장)
-        final String approvalCode = DateTime.now().strftime("%y%m%d") + "123456";
-        final String orderNo = phoneNumber ?? (DateTime.now().strftime("%y%m%d") + "654321");
+        final String formattedDate = DateFormat('yyMMdd').format(DateTime.now());
+        final String approvalCode = formattedDate + "123456";
+        final String orderNo = phoneNumber ?? (formattedDate + "654321");
         _showPaymentSuccessDialog(orderNo, approvalCode);
       }
     });
@@ -313,12 +317,12 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
             children: [
               const Icon(Icons.check_circle, color: Color(0xff7C3AED), size: 100),
               const SizedBox(height: 24),
-              const Text("결제 완료!", style: TextStyle(fontSize: 36, fontWeight: FontWeight.extrabold, color: Colors.black)),
+              const Text("결제 완료!", style: TextStyle(fontSize: 36, fontWeight: FontWeight.w800, color: Colors.black)),
               const SizedBox(height: 16),
               const Text("카드를 회수하고 영수증을 확인해 주세요.", style: TextStyle(fontSize: 20, color: Colors.grey, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
               const Divider(height: 40),
               Row(
-                mainAxisAlignment: MainAxisAlignment.between,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text("주문 번호", style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.bold)),
                   Text(orderNo, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xff7C3AED))),
@@ -326,7 +330,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
               ),
               const SizedBox(height: 8),
               Row(
-                mainAxisAlignment: MainAxisAlignment.between,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text("승인 번호", style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.bold)),
                   Text(approvalCode, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
@@ -344,7 +348,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xff7C3AED),
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 48, py: 16),
+                  padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
                 child: const Text("처음으로 돌아가기", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
@@ -380,7 +384,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
                     boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
                   ),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.between,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -388,7 +392,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
                         children: [
                           Text(
                             _storeName,
-                            style: const TextStyle(fontSize: 32, fontWeight: FontWeight.extrabold, color: Color(0xff7C3AED)),
+                            style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w800, color: Color(0xff7C3AED)),
                           ),
                           const SizedBox(height: 8),
                           const Text(
@@ -404,7 +408,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
                         children: [
                           Text(
                             _currentTime,
-                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black85, fontFamily: 'monospace'),
+                            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black87, fontFamily: 'monospace'),
                           ),
                           const SizedBox(height: 4),
                           Container(
@@ -432,8 +436,10 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
                       // 좌측: 카테고리 탭 (25% 너비)
                       Container(
                         width: constraints.maxWidth * 0.25,
-                        color: Colors.white,
-                        border: const Border(right: BorderSide(color: Color(0xffE5E7EB), width: 1.5)),
+                        decoration: const BoxDecoration(
+                          color: Colors.white,
+                          border: Border(right: BorderSide(color: Color(0xffE5E7EB), width: 1.5)),
+                        ),
                         child: ListView.builder(
                           itemCount: _categories.length,
                           itemBuilder: (context, index) {
@@ -462,8 +468,8 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
                                   cat['name'],
                                   style: TextStyle(
                                     fontSize: 22,
-                                    fontWeight: isSelected ? FontWeight.extrabold : FontWeight.bold,
-                                    color: isSelected ? const Color(0xff7C3AED) : Colors.black85,
+                                    fontWeight: isSelected ? FontWeight.w800 : FontWeight.bold,
+                                    color: isSelected ? const Color(0xff7C3AED) : Colors.black87,
                                   ),
                                   textAlign: TextAlign.center,
                                 ),
@@ -541,14 +547,14 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
                                                     const SizedBox(height: 12),
                                                     Text(
                                                       product['name'],
-                                                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.extrabold, color: Colors.black),
+                                                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.black),
                                                       maxLines: 1,
                                                       overflow: TextOverflow.ellipsis,
                                                     ),
                                                     const SizedBox(height: 6),
                                                     Text(
                                                       "₩${product['price'].toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}",
-                                                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.extrabold, color: Color(0xff7C3AED)),
+                                                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xff7C3AED)),
                                                     )
                                                   ],
                                                 ),
@@ -563,7 +569,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
                                                   child: const Center(
                                                     child: Text(
                                                       "품 절",
-                                                      style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.extrabold, letterSpacing: 4),
+                                                      style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: 4),
                                                     ),
                                                   ),
                                                 )
@@ -636,7 +642,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
                                             ),
                                             Text(
                                               "${item.quantity}개",
-                                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.extrabold),
+                                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                                             ),
                                             IconButton(
                                               onPressed: () => _updateCartItemQuantity(index, 1),
@@ -657,18 +663,20 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
                       Container(
                         width: constraints.maxWidth * 0.32,
                         padding: const EdgeInsets.all(20),
-                        border: const Border(left: BorderSide(color: Color(0xffE5E7EB), width: 1.5)),
+                        decoration: const BoxDecoration(
+                          border: Border(left: BorderSide(color: Color(0xffE5E7EB), width: 1.5)),
+                        ),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                             Row(
-                              mainAxisAlignment: MainAxisAlignment.between,
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 const Text("선택 총액", style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.bold)),
                                 Text(
                                   "₩${_getCartTotal().toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}",
-                                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.extrabold, color: Colors.black),
+                                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.black),
                                 ),
                               ],
                             ),
@@ -684,7 +692,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
                               ),
                               child: const Text(
                                 "결제하기",
-                                style: TextStyle(fontSize: 26, fontWeight: FontWeight.extrabold, letterSpacing: 2),
+                                style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: 2),
                               ),
                             )
                           ],
@@ -737,12 +745,12 @@ class VirtualCardPaymentDialog extends StatelessWidget {
             const SizedBox(height: 32),
             const Text(
               "IC 카드를 끝까지 넣어주세요",
-              style: TextStyle(fontSize: 26, fontWeight: FontWeight.extrabold, color: Colors.black),
+              style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: Colors.black),
             ),
             const SizedBox(height: 12),
             Text(
               "승인이 완료될 때까지 카드를 빼지 마세요.",
-              style: TextStyle(fontSize: 16, color: Colors.grey[600], fontWeight: FontWeight.semibold),
+              style: TextStyle(fontSize: 16, color: Colors.grey[600], fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 24),
             Container(
@@ -813,9 +821,9 @@ class _PhoneInputBottomSheetState extends State<PhoneInputBottomSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.between,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("주문서 발송 연락처 입력", style: TextStyle(fontSize: 28, fontWeight: FontWeight.extrabold)),
+              const Text("주문서 발송 연락처 입력", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800)),
               IconButton(
                 onPressed: () => Navigator.of(context).pop(),
                 icon: const Icon(Icons.close, size: 36),
@@ -825,7 +833,7 @@ class _PhoneInputBottomSheetState extends State<PhoneInputBottomSheet> {
           const SizedBox(height: 16),
           const Text(
             "카카오톡으로 주문서 및 영수증을 받아보실 휴대폰 번호를 입력해 주세요.",
-            style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.semibold),
+            style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 32),
           // 번호 노출창
@@ -839,7 +847,7 @@ class _PhoneInputBottomSheetState extends State<PhoneInputBottomSheet> {
             alignment: Alignment.center,
             child: Text(
               _phoneNumber,
-              style: const TextStyle(fontSize: 48, fontWeight: FontWeight.extrabold, color: Color(0xff7C3AED), letterSpacing: 4),
+              style: const TextStyle(fontSize: 48, fontWeight: FontWeight.w800, color: Color(0xff7C3AED), letterSpacing: 4),
             ),
           ),
           const SizedBox(height: 32),
@@ -883,7 +891,7 @@ class _PhoneInputBottomSheetState extends State<PhoneInputBottomSheet> {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: isClear || isBack ? Colors.grey[200] : const Color(0xffF3F4F6),
-                    foregroundColor: Colors.black85,
+                    foregroundColor: Colors.black87,
                     elevation: 0,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
@@ -894,7 +902,7 @@ class _PhoneInputBottomSheetState extends State<PhoneInputBottomSheet> {
                         style: TextStyle(
                           fontSize: isClear ? 20 : 32,
                           fontWeight: FontWeight.bold,
-                          color: isClear ? Colors.red : Colors.black85
+                          color: isClear ? Colors.red : Colors.black87
                         ),
                       ),
                 );
@@ -921,8 +929,4 @@ class _PhoneInputBottomSheetState extends State<PhoneInputBottomSheet> {
     );
   }
 }
-extension DateTimeFormatting on DateTime {
-  String strftime(String format) {
-    return DateFormat(format).format(this);
-  }
-}
+

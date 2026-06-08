@@ -7,6 +7,7 @@ import uuid
 from typing import List
 from datetime import datetime, time
 from models.product import Product
+from models.store import Store
 from database import get_db
 from models.order import Order
 from models.user import UserInfo, UserRole
@@ -50,9 +51,15 @@ async def get_orders(
     db: Session = Depends(get_db),
     current_user: UserInfo = Depends(get_current_user) # 로그인 사용자 토큰 검증
 ):
-    # 권한 검증: 본인 매장인지 체크 (MANAGER / STAFF 권한일 때)
-    if current_user.role == UserRole.MANAGER and current_user.id != db.get(Product, store_id): # 간접 체크 대체
-        pass # 실제 check는 아래에서 store 소유권 기반으로 합니다.
+    # 권한 검증: 매장 존재 여부 및 본인 매장 소유권 체크 (MANAGER / STAFF 권한일 때)
+    target_store = db.get(Store, store_id)
+    if not target_store:
+        raise HTTPException(status_code=404, detail="해당 매장을 찾을 수 없습니다.")
+
+    if current_user.role == UserRole.MANAGER and target_store.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="본인 매장의 매출 내역만 조회할 수 있습니다.")
+    elif current_user.role == UserRole.STAFF and current_user.store_id != store_id:
+        raise HTTPException(status_code=403, detail="본인 매장의 매출 내역만 조회할 수 있습니다.")
     
     stmt = select(Order).where(Order.store_id == store_id)
 

@@ -3,6 +3,7 @@ import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { LayoutDashboard, Receipt, Package, Settings, LogOut, Store, UserCircle, Monitor } from 'lucide-react';
 import EmptyPage from './EmptyPage';
+import DashboardHome from './DashboardHome';
 import ProfilePage from './ProfilePage';
 import StoreManagement from './StoreManagement';
 import StoreDetail from './StoreDetail';
@@ -124,7 +125,7 @@ export default function Dashboard() {
         
         <div className="flex-1 overflow-auto bg-[#F9FAFB]">
           <Routes>
-            <Route path="/" element={<EmptyPage title="대시보드 홈" />} />
+            <Route path="/" element={<DashboardHome />} />
             
             {/* 매장 관리 라우팅 (가드 적용) */}
             <Route 

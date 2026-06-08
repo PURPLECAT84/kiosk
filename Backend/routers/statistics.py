@@ -1,10 +1,11 @@
-from fastapi import APIRouter,Depends,HTTPException,status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, select, desc
 from datetime import date
 from models.order import Order
 from models.user import UserInfo, UserRole
 from models.order_item import OrderItem
+from models.store import Store
 from database import get_db
 from core.dependency import get_current_user
 
@@ -14,36 +15,35 @@ router = APIRouter()
 def get_dashboard_summary (db : Session = Depends(get_db),
     current_user: UserInfo = Depends(get_current_user)):
     
-    if current_user.role not in [UserRole.MANAGER, UserRole.MASTER]:
+    if current_user.role not in [UserRole.DEV, UserRole.HEAD, UserRole.MASTER, UserRole.MANAGER]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
-            detail="대시보드는 사장님만 볼 수 있는 1급 기밀입니다!"
+            detail="대시보드 권한이 없습니다."
         )
 
     today_start = date.today()
     month_start = today_start.replace(day=1)
 
-    total_sales = db.scalar(
-        select(func.sum(Order.total_amount)).where(Order.created_date >= today_start)
-    )
+    sales_stmt = select(func.sum(Order.total_amount)).where(Order.created_date >= today_start)
+    monthly_stmt = select(func.sum(Order.total_amount)).where(Order.created_date >= month_start)
+    order_stmt = select(func.count(Order.id)).where(Order.created_date >= today_start)
 
-    if total_sales == None:
-        total_sales = 0
+    # MANAGER 권한인 경우 본인 매장의 데이터만 필터링
+    if current_user.role == UserRole.MANAGER:
+        store_ids = db.scalars(select(Store.id).where(Store.user_id == current_user.id)).all()
+        if not store_ids:
+            return {
+                "today_sales" : 0,
+                "today_orders" : 0,
+                "monthly_sales": 0
+            }
+        sales_stmt = sales_stmt.where(Order.store_id.in_(store_ids))
+        monthly_stmt = monthly_stmt.where(Order.store_id.in_(store_ids))
+        order_stmt = order_stmt.where(Order.store_id.in_(store_ids))
 
-    monthly_sales = db.scalar(
-        select(func.sum(Order.total_amount)).where(Order.created_date >= month_start)
-    )
-
-    if monthly_sales == None:
-        monthly_sales = 0
-
-    total_order = db.scalar(
-        select(func.count(Order.id)).where(Order.created_date >= today_start)
-    )
-
-    if total_order == None:
-        total_order = 0
-
+    total_sales = db.scalar(sales_stmt) or 0
+    monthly_sales = db.scalar(monthly_stmt) or 0
+    total_order = db.scalar(order_stmt) or 0
 
     return {
         "today_sales" : total_sales,
@@ -52,38 +52,45 @@ def get_dashboard_summary (db : Session = Depends(get_db),
     }
 
 
-
 @router.get("/best-sellers", summary="오늘의 베스트셀러 Top 5")
 def get_best_sellers(db: Session = Depends(get_db),
                      current_user: UserInfo = Depends(get_current_user)):
     
-    if current_user.role not in [UserRole.MANAGER, UserRole.MASTER]:
+    if current_user.role not in [UserRole.DEV, UserRole.HEAD, UserRole.MASTER, UserRole.MANAGER]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, 
-            detail="대시보드는 사장님만 볼 수 있는 1급 기밀입니다!"
+            detail="대시보드 권한이 없습니다."
         )
 
     today_start = date.today()
 
-    # 🚂 기차 칸을 엔터로 나누면 읽기가 훨씬 편해집니다!
     stmt = (
         select(OrderItem.product_name, func.sum(OrderItem.quantity))
-        .join(Order, OrderItem.order_id == Order.id)    # 스테이플러 철컥!
-        .where(Order.created_date >= today_start)       # 오늘 팔린 것만
-        .group_by(OrderItem.product_name)               # 메뉴별로 묶어!
-        .order_by(func.sum(OrderItem.quantity).desc())  # 수량 내림차순! (괄호 위치 수정)
-        .limit(5)                                       # 5개만 잘라!
+        .join(Order, OrderItem.order_id == Order.id)
+        .where(Order.created_date >= today_start)
+    )
+
+    # MANAGER 권한인 경우 본인 매장의 데이터만 필터링
+    if current_user.role == UserRole.MANAGER:
+        store_ids = db.scalars(select(Store.id).where(Store.user_id == current_user.id)).all()
+        if not store_ids:
+            return []
+        stmt = stmt.where(Order.store_id.in_(store_ids))
+
+    stmt = (
+        stmt.group_by(OrderItem.product_name)
+        .order_by(func.sum(OrderItem.quantity).desc())
+        .limit(5)
     )
 
     result = db.execute(stmt).all()
 
     best_seller_list = []
-
     for row in result:
-        # row[0]은 이름, row[1]은 판매 수량!
         best_seller_list.append({"product_name": row[0], "total_sold": row[1]})
 
     return best_seller_list
+
 
 
 
