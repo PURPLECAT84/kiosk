@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Store, Plus, ToggleLeft, ToggleRight, Loader2 } from 'lucide-react';
 
@@ -18,8 +18,10 @@ interface StoreItem {
 export default function StoreManagement() {
   const { token, user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [stores, setStores] = useState<StoreItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const ownerFilter = searchParams.get('ownerName');
   const [error, setError] = useState('');
 
   // 매장 생성 모달 상태
@@ -111,6 +113,10 @@ export default function StoreManagement() {
     }
   };
 
+  const filteredStores = ownerFilter
+    ? stores.filter(s => s.owner_name === ownerFilter)
+    : stores;
+
   if (isLoading) {
     return (
       <div className="flex-1 p-8 flex justify-center items-center h-full">
@@ -146,6 +152,18 @@ export default function StoreManagement() {
         </button>
       </div>
 
+      {ownerFilter && (
+        <div className="bg-[#7C3AED]/5 text-[#7C3AED] px-5 py-3 rounded-2xl flex justify-between items-center text-sm font-semibold border border-[#7C3AED]/10 animate-fade-in">
+          <span>🎯 점주 [{ownerFilter}] 사장님의 매장 목록만 필터링되어 보여집니다.</span>
+          <button 
+            onClick={() => setSearchParams({})} 
+            className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors"
+          >
+            필터 해제
+          </button>
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -160,14 +178,14 @@ export default function StoreManagement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-gray-700">
-              {stores.length === 0 ? (
+              {filteredStores.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="text-center py-12 text-gray-400 font-medium">
-                    등록된 매장이 없습니다.
+                    {ownerFilter ? `[${ownerFilter}] 사장님의 등록된 매장이 없습니다.` : '등록된 매장이 없습니다.'}
                   </td>
                 </tr>
               ) : (
-                stores.map((store) => (
+                filteredStores.map((store) => (
                   <tr key={store.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 font-mono font-bold text-[#7C3AED]">
                       <button 

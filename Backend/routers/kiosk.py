@@ -68,10 +68,20 @@ async def read_kiosk(
     current_user: UserInfo = Depends(require_roles(general_roles))
 ):
     stmt = select(Kiosk, Store.name).join(Store, Kiosk.store_id == Store.id)
-    
-    # MANAGER 권한인 경우 본인 매장의 키오스크만 조회되도록 필터링
+    # 📝 [초보자를 위한 멘토링 주석]
+    # 키오스크 조회 시 사용자의 권한(Role)에 따른 데이터 필터링 흐름을 정의합니다.
+    # 1. MANAGER 권한(사장님): 본인의 매장(Store.user_id == current_user.id)에 속한 키오스크만 볼 수 있어야 합니다.
+    #    - 이때 만약 사장님이 여러 매장 중 특정 매장(store_id)을 필터링하여 조회를 원할 경우, store_id 검색 조건도 함께 적용해 줍니다.
+    # 2. MASTER / DEV / HEAD 권한(본사 및 개발자): 전 매장의 키오스크를 볼 수 있으며, 특정 매장(store_id)을 선택하면 해당 매장의 키오스크만 필터링합니다.
     if current_user.role == UserRole.MANAGER:
+        # 사장님의 경우 본인 소유의 매장에 해당하는 키오스크만 가져오도록 1차 필터링
         stmt = stmt.where(Store.user_id == current_user.id)
+        
+        # 사장님이 조회 화면이나 온보딩 화면에서 특정 매장(store_id)을 명시적으로 선택한 경우, 2차 필터링 추가
+        if store_id:
+            stmt = stmt.where(Kiosk.store_id == store_id)
+            
+    # 사장님이 아닌 본사 관리자나 개발자(DEV/MASTER) 권한인데, 특정 매장을 필터링하여 보고 싶어 하는 경우
     elif store_id:
         stmt = stmt.where(Kiosk.store_id == store_id)
         

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Monitor, Plus, Calendar, Loader2 } from 'lucide-react';
 
@@ -20,12 +20,15 @@ interface KioskItem {
 interface StoreItem {
   id: string;
   name: string;
+  owner_name?: string | null;
 }
 
 export default function KioskManagement() {
   const { token, user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [kiosks, setKiosks] = useState<KioskItem[]>([]);
+  const ownerFilter = searchParams.get('ownerName');
   const [stores, setStores] = useState<StoreItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -137,6 +140,14 @@ export default function KioskManagement() {
     }
   };
 
+  const ownerStoreIds = ownerFilter
+    ? stores.filter(s => s.owner_name === ownerFilter).map(s => s.id)
+    : [];
+
+  const filteredKiosks = ownerFilter
+    ? kiosks.filter(k => ownerStoreIds.includes(k.store_id))
+    : kiosks;
+
   if (isLoading) {
     return (
       <div className="flex-grow p-8 flex justify-center items-center h-full">
@@ -174,6 +185,18 @@ export default function KioskManagement() {
         )}
       </div>
 
+      {ownerFilter && (
+        <div className="bg-[#7C3AED]/5 text-[#7C3AED] px-5 py-3 rounded-2xl flex justify-between items-center text-sm font-semibold border border-[#7C3AED]/10 animate-fade-in">
+          <span>🎯 점주 [{ownerFilter}] 사장님의 키오스크 목록만 필터링되어 보여집니다.</span>
+          <button 
+            onClick={() => setSearchParams({})} 
+            className="bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 px-3 py-1.5 rounded-lg text-xs font-bold cursor-pointer transition-colors"
+          >
+            필터 해제
+          </button>
+        </div>
+      )}
+
       <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -190,14 +213,14 @@ export default function KioskManagement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-gray-700">
-              {kiosks.length === 0 ? (
+              {filteredKiosks.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="text-center py-12 text-gray-400 font-medium">
-                    등록된 키오스크 기기가 없습니다.
+                    {ownerFilter ? `[${ownerFilter}] 사장님의 등록된 키오스크 기기가 없습니다.` : '등록된 키오스크 기기가 없습니다.'}
                   </td>
                 </tr>
               ) : (
-                kiosks.map((kiosk) => (
+                filteredKiosks.map((kiosk) => (
                   <tr key={kiosk.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 font-mono font-bold text-[#7C3AED]">
                       <button 

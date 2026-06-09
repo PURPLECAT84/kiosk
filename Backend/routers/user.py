@@ -12,7 +12,8 @@ from models.user import UserInfo, UserRole
 from schemas.user import (UserCreate, UserResponse, Token, UserUpdate, 
                           UserPasswordUpdate, UserDelete,
                           FindIdRequest, FindIdResponse,
-                          ResetPasswordRequest, ResetPasswordResponse)
+                          ResetPasswordRequest, ResetPasswordResponse,
+                          UserManagementResponse)
 from core.security import get_password_hash, verify_password, create_access_token
 # 🔥 [핵심] 아까 만든 문지기를 여기서 불러옵니다!
 from core.dependency import get_current_user 
@@ -56,17 +57,20 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)):
     db.refresh(new_user)
     return new_user
 
-"""===================== 회원 전체 조회 ============================"""
-@router.get("/", response_model=List[UserResponse], summary="회원조회")
+"""===================== 회원 전체 조회 (어드민용 고도화) ============================"""
+@router.get("/", response_model=List[UserManagementResponse], summary="회원조회")
 async def read_user(
-    skip: int = 0, limit: int = 10, 
+    skip: int = 0, limit: int = 100, 
     name: str | None = None, email: str | None = None,
     current_user: UserInfo = Depends(get_current_user), # 🔒 권한 검사
     db: Session = Depends(get_db)
 ):
-    if current_user.role not in [UserRole.MASTER, UserRole.DEV]:
+    # 📝 [초보자를 위한 멘토링 주석]
+    # 어드민 전용 회원 목록 조회입니다. 보안을 위해 MASTER, DEV, HEAD 권한의 관리자만 접근 가능합니다.
+    if current_user.role not in [UserRole.MASTER, UserRole.DEV, UserRole.HEAD]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="회원조회 권한이 없습니다")
 
+    # 1. 필터 조건에 따라 회원 리스트 조회
     stmt = select(UserInfo)
     if name: 
         stmt = stmt.where(UserInfo.name.contains(name))
@@ -74,7 +78,57 @@ async def read_user(
         stmt = stmt.where(UserInfo.email.contains(email))
     
     stmt = stmt.offset(skip).limit(limit)
-    return db.execute(stmt).scalars().all()
+    users = db.execute(stmt).scalars().all()
+
+    # 2. 조회된 유저들에 대해 매장명 요약 및 키오스크 수 통계 조립
+    from models.store import Store
+    from models.kiosk import Kiosk
+    
+    response_data = []
+    for user in users:
+        # 각 점주가 만든 매장 목록을 생성일자 순으로 조회합니다.
+        store_stmt = select(Store).where(Store.user_id == user.id).order_by(Store.created_at.asc())
+        stores = db.execute(store_stmt).scalars().all()
+        
+        # 매장 요약 정보 조립
+        if not stores:
+            store_names_summary = "매장 없음"
+        elif len(stores) == 1:
+            store_names_summary = stores[0].name
+        else:
+            # 복수 매장일 경우: 가장 처음 만든 매장명 외 00개 로 표기
+            store_names_summary = f"{stores[0].name} 외 {len(stores) - 1}개"
+            
+        # 각 점주가 가진 모든 매장의 키오스크 상태 집계
+        active_kiosks = 0
+        inactive_kiosks = 0
+        if stores:
+            store_ids = [s.id for s in stores]
+            kiosk_stmt = select(Kiosk).where(Kiosk.store_id.in_(store_ids))
+            kiosks = db.execute(kiosk_stmt).scalars().all()
+            for k in kiosks:
+                if k.status == "OPERATING":
+                    active_kiosks += 1
+                else:
+                    inactive_kiosks += 1
+                    
+        # 응답 객체 구성
+        response_data.append(UserManagementResponse(
+            id=user.id,
+            email=user.email,
+            name=user.name,
+            phone=user.phone,
+            role=user.role,
+            status=user.status,
+            created_at=user.created_at,
+            store_names_summary=store_names_summary,
+            kiosks_summary={
+                "active_count": active_kiosks,
+                "inactive_count": inactive_kiosks
+            }
+        ))
+        
+    return response_data
 
 """===================== 내 정보 수정 ============================"""
 @router.patch("/me", response_model=UserResponse, summary="내 정보 수정")

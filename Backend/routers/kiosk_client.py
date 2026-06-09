@@ -73,6 +73,7 @@ async def sync_kiosk(
         
     return KioskSyncResponse(
         store_name=store.name,
+        kiosk_type=kiosk.type, # 📝 [초보자용 멘토링] 키오스크 기기 타입(외식형/판매형)을 추가하여 클라이언트가 추가 API 조회 없이 즉각 인지하도록 처리합니다.
         categories=cat_responses
     )
 

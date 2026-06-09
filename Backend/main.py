@@ -32,6 +32,16 @@ from routers import user, store, kiosk, kiosk_client, shelve, category, product,
 # 주의: Alembic 같은 마이그레이션 툴을 쓸 때는 이 기능을 끄는 것이 좋습니다. (현재는 개발 편의를 위해 유지)
 Base.metadata.create_all(bind=engine)
 
+# 1-2. 초기 연동 더미 데이터 시딩 (Seeding)
+# 완전 초보자들의 실시간 연동 테스트를 위해, 고정된 UUID의 매장과 키오스크 및 메뉴들을 자동으로 삽입합니다.
+from database import DB_session
+from core.seeder import seed_initial_data
+db_session = DB_session()
+try:
+    seed_initial_data(db_session)
+finally:
+    db_session.close()
+
 # 2. 정적 파일 디렉토리 보장
 # 사용자가 업로드할 이미지가 저장될 기본 폴더를 만듭니다.
 os.makedirs("static/images", exist_ok=True)

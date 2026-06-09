@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,7 +37,23 @@ class KioskApp extends StatelessWidget {
 
 // 가상 키오스크 상태 설정
 const String defaultKioskId = "88888888-8888-8888-8888-888888888888"; // 로컬 시뮬레이션용 ID
-const String backendUrl = "http://127.0.0.1:8000"; // 로컬 FastAPI 백엔드 주소
+
+String get backendUrl {
+  if (kIsWeb) {
+    // 1. URL 쿼리 스트링에 ?api=https://... 주소가 전달되었는지 확인 (외부 터널링 연동용)
+    final queryApi = Uri.base.queryParameters['api'];
+    if (queryApi != null && queryApi.isNotEmpty) {
+      return queryApi;
+    }
+
+    // 2. 쿼리 스트링이 없는 경우, 접속한 호스트명 기반으로 백엔드 포트 매핑
+    final host = Uri.base.host;
+    if (host.isNotEmpty) {
+      return "http://$host:8000";
+    }
+  }
+  return "http://127.0.0.1:8000"; // 로컬 FastAPI 백엔드 주소 기본값
+}
 
 class CartItem {
   final String productId;
@@ -75,18 +93,74 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
   // 장바구니 상태
   final List<CartItem> _cart = [];
 
+  // 대문화면 여부 및 타이머 상태
+  bool _isStarted = false;
+  Timer? _inactivityTimer;
+
+  // 디바이스 온보딩(매핑) 관련 로컬 상태 변수들
+  String? _kioskId;
+  bool _isLocalLoading = true;
+  final _kioskIdController = TextEditingController(); // 키오스크 기기 ID (UUID) 입력 컨트롤러
+  bool _isOnboardingSubmitting = false;
+  String _onboardingError = "";
+  int _adminTapCount = 0;
+
   @override
   void initState() {
     super.initState();
     _updateTime();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (timer) => _updateTime());
-    _syncKioskData();
+    _loadLocalKioskId(); // 최초 시작 시 로컬 kiosk_id 감지
   }
 
   @override
   void dispose() {
     _clockTimer.cancel();
+    _inactivityTimer?.cancel();
+    _kioskIdController.dispose();
     super.dispose();
+  }
+
+  void _resetInactivityTimer() {
+    _inactivityTimer?.cancel();
+    if (_isStarted) {
+      // 2분(120초) 동안 미조작 시 장바구니 초기화 후 대문화면 복귀
+      _inactivityTimer = Timer(const Duration(minutes: 2), () {
+        if (mounted) {
+          setState(() {
+            _cart.clear();
+            _isStarted = false;
+          });
+        }
+      });
+    }
+  }
+
+  // 1. SharedPreferences 로컬 기기 UUID 로드
+  Future<void> _loadLocalKioskId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      setState(() {
+        _kioskId = prefs.getString('kiosk_id');
+        _isLocalLoading = false;
+      });
+      if (_kioskId != null) {
+        _syncKioskData();
+      }
+    } catch (e) {
+      setState(() {
+        _isLocalLoading = false;
+      });
+    }
+  }
+
+  // 2. 관리자 히든 탭 감지 (5회 연타 시 관리자 진입)
+  void _handleAdminTap() {
+    _adminTapCount++;
+    if (_adminTapCount >= 5) {
+      _adminTapCount = 0;
+      _showAdminPasswordDialog();
+    }
   }
 
   void _updateTime() {
@@ -99,6 +173,8 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
 
   // 백엔드 API로부터 상품 및 매장 타입 동기화
   Future<void> _syncKioskData() async {
+    if (_kioskId == null) return;
+
     setState(() {
       _isLoading = true;
       _errorMessage = "";
@@ -106,15 +182,27 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
 
     try {
       // 1. 키오스크 상세 조회하여 store_id 및 type 확인
-      final kioskRes = await http.get(Uri.parse('$backendUrl/kiosks/$defaultKioskId'));
+      final kioskRes = await http.get(Uri.parse('$backendUrl/kiosks/$_kioskId'));
       if (kioskRes.statusCode == 200) {
         final kioskData = json.decode(kioskRes.body);
         _kioskType = kioskData['type'] ?? 'Restaurant';
         _storeId = kioskData['store_id'];
+      } else if (kioskRes.statusCode == 404 || kioskRes.statusCode == 403) {
+        // 기기가 데이터베이스에서 삭제되었거나 권한 오류 발생 시 로컬 캐시 초기화 및 온보딩 튕기기
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('kiosk_id');
+        setState(() {
+          _kioskId = null;
+          _isStarted = false;
+          _isLoading = false;
+        });
+        return;
+      } else {
+        throw Exception("키오스크 정보를 읽을 수 없습니다.");
       }
 
       // 2. 카테고리 & 상품 리스트 동기화
-      final syncRes = await http.get(Uri.parse('$backendUrl/kiosk_client/sync/$defaultKioskId'));
+      final syncRes = await http.get(Uri.parse('$backendUrl/kiosk_client/sync/$_kioskId'));
       if (syncRes.statusCode == 200) {
         final syncData = json.decode(syncRes.body);
         setState(() {
@@ -126,7 +214,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
         throw Exception("동기화 API 호출 실패");
       }
     } catch (e) {
-      // API 연결 실패 시 오프라인 모드용 더미 데이터 폴백
+      // API 연결 자체가 아예 실패한 경우(오프라인 상태)에는 로컬 더미 데이터로 기동 (단, kioskId가 있는 경우에만 오프라인 모드 진입)
       setState(() {
         _storeName = "모키 반점 (오프라인 모드)";
         _kioskType = "Restaurant";
@@ -362,11 +450,45 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLocalLoading) {
+      return const Scaffold(
+        backgroundColor: Color(0xffF3F4F6),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: Color(0xff7C3AED), strokeWidth: 5),
+              SizedBox(height: 16),
+              Text("기기 상태 확인 중...", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_kioskId == null) {
+      return Scaffold(
+        backgroundColor: const Color(0xffF3F4F6),
+        body: _buildOnboardingScreen(),
+      );
+    }
+
+    if (!_isStarted) {
+      return Scaffold(
+        body: _buildWelcomeScreen(),
+      );
+    }
+
     return Scaffold(
       backgroundColor: const Color(0xffF3F4F6),
-      body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () {
+          _resetInactivityTimer();
+        },
+        child: SafeArea(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
             // FHD 세로형 규격(1080x1920) 타겟팅 비율 기반 동적 레이아웃 분할
             final double screenHeight = constraints.maxHeight;
             final double headerHeight = screenHeight * 0.15;
@@ -701,11 +823,387 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
                     ],
                   ),
                 ),
-              ],
+                ],
             );
           },
         ),
       ),
+    ),
+  );
+}
+
+Widget _buildWelcomeScreen() {
+  return GestureDetector(
+    onTap: () {
+      setState(() {
+        _isStarted = true;
+      });
+      _resetInactivityTimer();
+    },
+    child: Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xff7C3AED), Color(0xff4F46E5)],
+        ),
+      ),
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // 매장명 로고
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
+              ),
+              child: Text(
+                _storeName,
+                style: const TextStyle(
+                  fontSize: 48,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  letterSpacing: 2,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 80),
+            // 터치 시작 안내
+            const Icon(
+              Icons.touch_app,
+              size: 120,
+              color: Colors.white,
+            ),
+            const SizedBox(height: 40),
+            const Text(
+              "화면을 터치해 주세요",
+              style: TextStyle(
+                fontSize: 36,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: 1,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              "주문하시려면 아무 곳이나 가볍게 눌러주세요.",
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w500,
+                color: Colors.white.withOpacity(0.8),
+              ),
+            ),
+            const SizedBox(height: 120),
+            // 하단 실시간 시간 (관리자 초기화 비밀 버튼 바인딩)
+            GestureDetector(
+              onTap: _handleAdminTap,
+              behavior: HitTestBehavior.opaque,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                child: Text(
+                  _currentTime,
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white.withOpacity(0.6),
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+  // 온보딩 기기 활성화 UI 렌더링
+  Widget _buildOnboardingScreen() {
+    return Center(
+      child: SingleChildScrollView(
+        child: Container(
+          width: 500,
+          padding: const EdgeInsets.all(40),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(30),
+            boxShadow: const [
+              BoxShadow(
+                color: Colors.black12,
+                blurRadius: 20,
+                offset: Offset(0, 10),
+              )
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Center(
+                child: Icon(
+                  Icons.settings_remote,
+                  size: 80,
+                  color: Color(0xff7C3AED),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Center(
+                child: Text(
+                  "MOKI 키오스크 활성화",
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.black,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Center(
+                child: Text(
+                  "파트너센터에서 기기를 생성하고 발급받은\n키오스크 기기 ID(UUID)를 입력하여 활성화해 주세요.",
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+              const SizedBox(height: 32),
+              TextField(
+                controller: _kioskIdController,
+                style: const TextStyle(fontSize: 18, fontFamily: 'monospace'),
+                decoration: InputDecoration(
+                  labelText: "키오스크 기기 ID (UUID)",
+                  labelStyle: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
+                  hintText: "예: 88888888-8888-8888-8888-888888888888",
+                  prefixIcon: const Icon(Icons.vpn_key, color: Color(0xff7C3AED)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide: const BorderSide(color: Color(0xff7C3AED), width: 2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              if (_onboardingError.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Text(
+                    _onboardingError,
+                    style: const TextStyle(color: Colors.red, fontSize: 14, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _isOnboardingSubmitting ? null : _handleOnboardingActivate,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xff7C3AED),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 18),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  elevation: 2,
+                  disabledBackgroundColor: Colors.grey[300],
+                ),
+                child: _isOnboardingSubmitting
+                    ? const SizedBox(
+                        height: 24,
+                        width: 24,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 3,
+                        ),
+                      )
+                    : const Text(
+                        "기기 등록 및 활성화",
+                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, letterSpacing: 1),
+                      ),
+              ),
+              const SizedBox(height: 24),
+              const Center(
+                child: Text(
+                  "기기 ID는 파트너센터의 [키오스크 관리] 메뉴에서 새 기기를 등록하여 발급받을 수 있습니다.",
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.amber,
+                    fontWeight: FontWeight.bold,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 입력된 키오스크 기기 ID(UUID) 활성화 처리
+  Future<void> _handleOnboardingActivate() async {
+    final inputId = _kioskIdController.text.trim();
+
+    if (inputId.isEmpty) {
+      setState(() {
+        _onboardingError = "키오스크 기기 ID(UUID)를 입력해 주세요.";
+      });
+      return;
+    }
+
+    final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+    if (!uuidRegex.hasMatch(inputId)) {
+      setState(() {
+        _onboardingError = "올바른 UUID 형식(8-4-4-4-12 자리)이 아닙니다.";
+      });
+      return;
+    }
+
+    setState(() {
+      _isOnboardingSubmitting = true;
+      _onboardingError = "";
+    });
+
+    try {
+      // 1. 해당 기기 ID로 백엔드 상품/매장명 동기화(Sync) API 호출
+      final syncRes = await http.get(Uri.parse('$backendUrl/kiosk_client/sync/$inputId'));
+      
+      if (syncRes.statusCode == 200) {
+        final syncData = json.decode(syncRes.body);
+        
+        // 2. SharedPreferences 로컬 기기 UUID 캐싱 저장
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('kiosk_id', inputId);
+
+        setState(() {
+          _kioskId = inputId;
+          _storeName = syncData['store_name'];
+          _categories = syncData['categories'];
+          _kioskType = syncData['kiosk_type'] ?? 'Restaurant'; // 백엔드 동기화 응답으로 반환된 타입 자동 바인딩
+          _isOnboardingSubmitting = false;
+        });
+
+        _kioskIdController.clear();
+        _showAlertDialog("기기 연동 성공", "[${syncData['store_name']}] 매장에 키오스크가 성공적으로 연결 및 활성화되었습니다!");
+      } else if (syncRes.statusCode == 404) {
+        setState(() {
+          _onboardingError = "등록되지 않은 키오스크 기기 ID입니다. 파트너센터에서 기기를 먼저 생성해 주세요.";
+          _isOnboardingSubmitting = false;
+        });
+      } else {
+        setState(() {
+          _onboardingError = "기기 조회 중 오류가 발생했습니다. (코드: ${syncRes.statusCode})";
+          _isOnboardingSubmitting = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _onboardingError = "서버 연결에 실패했습니다. 백엔드 전원 또는 주소를 확인해 주세요: $e";
+        _isOnboardingSubmitting = false;
+      });
+    }
+  }
+
+  // 관리자 비밀번호 입력 및 연동 해제 다이얼로그
+  void _showAdminPasswordDialog() {
+    final passwordController = TextEditingController();
+    String dialogError = "";
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              title: const Text(
+                "관리자 모드 (기기 초기화)",
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24, color: Color(0xff7C3AED)),
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    "기기 연동을 해제하고 초기화하려면 관리자 비밀번호를 입력해 주세요.",
+                    style: TextStyle(fontSize: 16, color: Colors.grey, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: passwordController,
+                    obscureText: true,
+                    keyboardType: TextInputType.number,
+                    maxLength: 4,
+                    style: const TextStyle(fontSize: 24, letterSpacing: 8, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                    decoration: InputDecoration(
+                      hintText: "••••",
+                      counterText: "",
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: const BorderSide(color: Color(0xff7C3AED), width: 2),
+                      ),
+                    ),
+                  ),
+                  if (dialogError.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Text(
+                        dialogError,
+                        style: const TextStyle(color: Colors.red, fontSize: 14, fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    passwordController.dispose();
+                    Navigator.of(ctx).pop();
+                  },
+                  child: const Text("취소", style: TextStyle(fontSize: 18, color: Colors.grey, fontWeight: FontWeight.bold)),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    if (passwordController.text == "8888") {
+                      passwordController.dispose();
+                      Navigator.of(ctx).pop();
+                      
+                      // 기기 연동 해제 로직 실행
+                      final prefs = await SharedPreferences.getInstance();
+                      await prefs.remove('kiosk_id');
+                      
+                      setState(() {
+                        _kioskId = null;
+                        _storeName = "모두의 키오스크";
+                        _categories.clear();
+                        _cart.clear();
+                        _isStarted = false;
+                      });
+
+                      _showAlertDialog("초기화 완료", "기기 연동이 성공적으로 해제되었습니다. 최초 온보딩 화면으로 이동합니다.");
+                    } else {
+                      setStateDialog(() {
+                        dialogError = "비밀번호가 일치하지 않습니다. (기본: 8888)";
+                      });
+                    }
+                  },
+                  child: const Text("확인", style: TextStyle(fontSize: 18, color: Color(0xff7C3AED), fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 }

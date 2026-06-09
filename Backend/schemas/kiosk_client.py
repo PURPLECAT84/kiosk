@@ -27,6 +27,7 @@ class KioskCategoryResponse(BaseModel):
 
 class KioskSyncResponse(BaseModel):
     store_name: str
+    kiosk_type: str # 키오스크 UI 유형 (Restaurant: 외식형, Store: 일반판매형)
     categories: List[KioskCategoryResponse]
 
     model_config = ConfigDict(from_attributes=True)

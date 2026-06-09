@@ -87,3 +87,22 @@ class ResetPasswordRequest(BaseModel):
 class ResetPasswordResponse(BaseModel):
     temp_password: str  # 화면에 노출할 임시 비밀번호
     message: str
+# ======================== 사용자 관리 (어드민용) ========================
+# 📝 [초보자를 위한 멘토링 주석]
+# 점주들의 전체 현황(매장 정보, 키오스크 수)을 한눈에 볼 수 있도록 어드민 대시보드 전용 데이터 구조(Schema)를 추가 정의합니다.
+class UserManagementKioskSummary(BaseModel):
+    active_count: int = Field(..., description="활성화(OPERATING) 상태인 키오스크 수")
+    inactive_count: int = Field(..., description="미활성화(WAITING 등) 상태인 키오스크 수")
+
+class UserManagementResponse(BaseModel):
+    id: uuid.UUID # 점주 고유아이디
+    email: EmailStr # 이메일
+    name: str # 이름
+    phone: str | None = None # 전화번호
+    role: UserRole # 권한
+    status: UserStatus # 상태
+    created_at: datetime # 가입일
+    store_names_summary: str = Field(..., description="소유 매장명 요약 정보 (예: '모키반점 외 2개')")
+    kiosks_summary: UserManagementKioskSummary = Field(..., description="운영 중인 키오스크 현황 (활성/미활성 개수)")
+
+    model_config = ConfigDict(from_attributes = True)

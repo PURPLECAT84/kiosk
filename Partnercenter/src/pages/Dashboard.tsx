@@ -1,7 +1,7 @@
 import React from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LayoutDashboard, Receipt, Package, Settings, LogOut, Store, UserCircle, Monitor } from 'lucide-react';
+import { LayoutDashboard, Receipt, Package, Users, LogOut, Store, UserCircle, Monitor } from 'lucide-react';
 import EmptyPage from './EmptyPage';
 import DashboardHome from './DashboardHome';
 import ProfilePage from './ProfilePage';
@@ -11,6 +11,7 @@ import KioskManagement from './KioskManagement';
 import KioskDetail from './KioskDetail';
 import OrdersPage from './OrdersPage';
 import ProductManagement from './ProductManagement';
+import UserManagement from './UserManagement';
 
 export default function Dashboard() {
   const { user, isLoading, logout, token } = useAuth();
@@ -75,7 +76,9 @@ export default function Dashboard() {
 
           <NavItem to="/orders" icon={Receipt} label="주문 내역" />
           <NavItem to="/products" icon={Package} label="상품 관리" />
-          <NavItem to="/settings" icon={Settings} label="설정" />
+          {canAccessStore && (
+            <NavItem to="/users" icon={Users} label="사용자 관리" />
+          )}
         </div>
 
         <div className="p-4 border-t border-gray-100">
@@ -100,7 +103,8 @@ export default function Dashboard() {
              location.pathname.startsWith('/kiosks') ? '키오스크 관리' : 
              location.pathname === '/orders' ? '주문 내역' : 
              location.pathname === '/products' ? '상품 관리' : 
-             location.pathname === '/profile' ? '내 정보' : '설정'}
+             location.pathname === '/profile' ? '내 정보' : 
+             location.pathname.startsWith('/users') ? '사용자 관리' : '설정'}
           </h2>
           <div className="flex items-center space-x-4">
             <div className="bg-gray-100 px-4 py-2 rounded-full text-sm font-bold text-gray-600">
@@ -149,6 +153,10 @@ export default function Dashboard() {
 
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/products" element={<ProductManagement />} />
+            <Route 
+              path="/users" 
+              element={canAccessStore ? <UserManagement /> : <Navigate to="/" replace />} 
+            />
             <Route path="/settings" element={<EmptyPage title="매장 설정" />} />
             <Route path="/profile" element={<React.Suspense fallback={<div>Loading...</div>}><ProfilePage /></React.Suspense>} />
           </Routes>
