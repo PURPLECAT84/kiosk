@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import func, select, desc
 from datetime import date
@@ -8,12 +8,17 @@ from models.order_item import OrderItem
 from models.store import Store
 from database import get_db
 from core.dependency import get_current_user
+from typing import Optional
+import uuid
 
 router = APIRouter()
 
 @router.get("/summary", summary = "오늘의 대시보드 요약")
-def get_dashboard_summary (db : Session = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user)):
+def get_dashboard_summary (
+    x_kiosk_id: Optional[uuid.UUID] = Header(None, alias="X-Kiosk-Id"),
+    db: Session = Depends(get_db),
+    current_user: UserInfo = Depends(get_current_user)
+):
     
     if current_user.role not in [UserRole.DEV, UserRole.HEAD, UserRole.MASTER, UserRole.MANAGER]:
         raise HTTPException(
@@ -27,6 +32,12 @@ def get_dashboard_summary (db : Session = Depends(get_db),
     sales_stmt = select(func.sum(Order.total_amount)).where(Order.created_date >= today_start)
     monthly_stmt = select(func.sum(Order.total_amount)).where(Order.created_date >= month_start)
     order_stmt = select(func.count(Order.id)).where(Order.created_date >= today_start)
+
+    # X-Kiosk-Id 헤더 필터 추가
+    if x_kiosk_id:
+        sales_stmt = sales_stmt.where(Order.kiosk_id == x_kiosk_id)
+        monthly_stmt = monthly_stmt.where(Order.kiosk_id == x_kiosk_id)
+        order_stmt = order_stmt.where(Order.kiosk_id == x_kiosk_id)
 
     # MANAGER 권한인 경우 본인 매장의 데이터만 필터링
     if current_user.role == UserRole.MANAGER:
@@ -53,8 +64,11 @@ def get_dashboard_summary (db : Session = Depends(get_db),
 
 
 @router.get("/best-sellers", summary="오늘의 베스트셀러 Top 5")
-def get_best_sellers(db: Session = Depends(get_db),
-                     current_user: UserInfo = Depends(get_current_user)):
+def get_best_sellers(
+    x_kiosk_id: Optional[uuid.UUID] = Header(None, alias="X-Kiosk-Id"),
+    db: Session = Depends(get_db),
+    current_user: UserInfo = Depends(get_current_user)
+):
     
     if current_user.role not in [UserRole.DEV, UserRole.HEAD, UserRole.MASTER, UserRole.MANAGER]:
         raise HTTPException(
@@ -69,6 +83,10 @@ def get_best_sellers(db: Session = Depends(get_db),
         .join(Order, OrderItem.order_id == Order.id)
         .where(Order.created_date >= today_start)
     )
+
+    # X-Kiosk-Id 헤더 필터 추가
+    if x_kiosk_id:
+        stmt = stmt.where(Order.kiosk_id == x_kiosk_id)
 
     # MANAGER 권한인 경우 본인 매장의 데이터만 필터링
     if current_user.role == UserRole.MANAGER:

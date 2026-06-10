@@ -1,10 +1,10 @@
 # routers/order.py
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import select, desc
 from sqlalchemy.sql import exists
 import uuid
-from typing import List
+from typing import List, Optional
 from datetime import datetime, time
 from models.product import Product
 from models.store import Store
@@ -37,8 +37,7 @@ async def create_order(
     db: Session = Depends(get_db)
 ):
     new_order = await create_order_transaction(db, order_data)
-    # 신규 생성 시에는 원본으로 노출해도 무방하지만 안전을 위해 expunge 후 반환
-    db.expunge(new_order)
+    # 📝 [초보자용 멘토링] 지연 로딩(Lazy Loading)으로 인한 DetachedInstanceError 방지를 위해 expunge 처리를 하지 않고 세션이 열린 상태로 반환합니다.
     return new_order
 
 
@@ -48,8 +47,9 @@ async def get_orders(
     store_id: uuid.UUID,
     start_date: datetime | None = None,
     end_date: datetime | None = None,
+    x_kiosk_id: Optional[uuid.UUID] = Header(None, alias="X-Kiosk-Id"),
     db: Session = Depends(get_db),
-    current_user: UserInfo = Depends(get_current_user) # 로그인 사용자 토큰 검증
+    current_user: UserInfo = Depends(get_current_user)
 ):
     # 권한 검증: 매장 존재 여부 및 본인 매장 소유권 체크 (MANAGER / STAFF 권한일 때)
     target_store = db.get(Store, store_id)
@@ -63,6 +63,10 @@ async def get_orders(
     
     stmt = select(Order).where(Order.store_id == store_id)
 
+    # X-Kiosk-Id 헤더 필터 추가
+    if x_kiosk_id:
+        stmt = stmt.where(Order.kiosk_id == x_kiosk_id)
+
     if start_date:
         stmt = stmt.where(Order.created_date >= start_date)
     if end_date:
@@ -72,12 +76,12 @@ async def get_orders(
     stmt = stmt.order_by(desc(Order.created_date))
     orders = db.scalars(stmt).all()
 
-    # 개인정보 마스킹 로직 적용 (Expunge를 통해 DB 세션 오염을 방지)
+    # 📝 [초보자용 멘토링] Pydantic 모델로 먼저 변환한 뒤 마스킹하여 DB 세션 오염을 방지하고 DetachedInstanceError도 예방합니다.
     response_orders = []
     for order in orders:
-        db.expunge(order)
-        order.order_no = mask_order_no(order.order_no)
-        response_orders.append(order)
+        pydantic_order = OrderResponse.model_validate(order)
+        pydantic_order.order_no = mask_order_no(pydantic_order.order_no)
+        response_orders.append(pydantic_order)
 
     return response_orders
 
@@ -99,8 +103,7 @@ async def get_order_detail(
     elif current_user.role == UserRole.STAFF and current_user.store_id != order.store_id:
         raise HTTPException(status_code=403, detail="본인 매장의 주문만 열람할 수 있습니다.")
         
-    # 마스킹이 해제된 원본 데이터 반환
-    db.expunge(order)
+    # 마스킹이 해제된 원본 데이터 반환 (DetachedInstanceError 방지를 위해 expunge 제거)
     return order
 
 
@@ -140,8 +143,6 @@ async def delete_orders(
 
     db.commit()
     db.refresh(order)
-    
-    db.expunge(order)
     return order
 
 
@@ -182,6 +183,4 @@ async def refund_order(
 
     db.commit()
     db.refresh(order)
-    
-    db.expunge(order)
     return order

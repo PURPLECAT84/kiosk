@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from database import get_db
@@ -8,7 +8,7 @@ from models.store import Store
 from models.user import UserInfo, UserRole
 from schemas.category import CategoryCreate, CategoryResponse,CategoryUpdate
 from routers.user import get_current_user
-from typing import List
+from typing import List, Optional
 import uuid
 
 router = APIRouter()
@@ -68,6 +68,7 @@ async def create_category(
 @router.get("/shelve/{shelve_id}", response_model=List[CategoryResponse], summary="특정 매대의 카테고리 조회")
 async def read_categories_by_shelve(
     shelve_id: uuid.UUID,
+    x_kiosk_id: Optional[uuid.UUID] = Header(None, alias="X-Kiosk-Id"),
     db: Session = Depends(get_db),
     current_user: UserInfo = Depends(get_current_user)
 ):
@@ -77,18 +78,20 @@ async def read_categories_by_shelve(
     
     if not target_shelve:
         raise HTTPException(status_code=404, detail="해당 매대를 찾을 수 없습니다.")
-
+ 
     store_stmt = select(Store).where(Store.id == target_shelve.store_id)
     target_store = db.execute(store_stmt).scalars().first()
-
+ 
     # 2. 권한 확인
     if current_user.role not in AutherList and current_user.id != target_store.user_id:
         raise HTTPException(status_code=403, detail="본인 매장의 카테고리만 조회할 수 있습니다.")
-
+ 
     # 3. 매대에 속한 카테고리 전체 조회
     cat_stmt = select(Category).where(Category.shelve_id == shelve_id)
+    if x_kiosk_id:
+        cat_stmt = cat_stmt.where(Category.kiosk_id == x_kiosk_id)
     categories = db.execute(cat_stmt).scalars().all()
-
+ 
     return categories
 
 
@@ -172,6 +175,7 @@ async def delete_category(
 @router.get("/store/{store_id}", response_model=List[CategoryResponse], summary="특정 매장의 모든 카테고리 조회")
 async def read_categories_by_store(
     store_id: uuid.UUID,
+    x_kiosk_id: Optional[uuid.UUID] = Header(None, alias="X-Kiosk-Id"),
     db: Session = Depends(get_db),
     current_user: UserInfo = Depends(get_current_user)
 ):
@@ -183,5 +187,7 @@ async def read_categories_by_store(
         raise HTTPException(status_code=403, detail="본인 매장의 카테고리만 조회할 수 있습니다.")
 
     cat_stmt = select(Category).where(Category.store_id == store_id)
+    if x_kiosk_id:
+        cat_stmt = cat_stmt.where(Category.kiosk_id == x_kiosk_id)
     categories = db.execute(cat_stmt).scalars().all()
     return categories

@@ -30,3 +30,20 @@ class KioskResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+class KioskAdminResponse(BaseModel):
+    user_id: uuid.UUID
+    name: str
+    email: str
+    phone: str | None = None
+    role: str
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+class KioskAdminCreate(BaseModel):
+    email: str
+    role: str = "STAFF"
+
+class KioskAdminUpdate(BaseModel):
+    role: str

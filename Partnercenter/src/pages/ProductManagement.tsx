@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useKiosk } from '../context/KioskContext';
 import { 
   Package, Search, ArrowUp, ArrowDown, Copy, Edit, Trash2, Loader2, 
   Plus, FolderOpen, CheckCircle, AlertTriangle, EyeOff, ClipboardCopy 
@@ -41,6 +42,7 @@ interface KioskItem {
 
 export default function ProductManagement() {
   const { token } = useAuth();
+  const { currentKioskId } = useKiosk();
   
   // States
   const [stores, setStores] = useState<StoreItem[]>([]);
@@ -87,7 +89,7 @@ export default function ProductManagement() {
     }
   };
 
-  // 2. 상품 목록 로드 (검색 필터 적용)
+  // 2. 상품 목록 로드 (검색 필터 적용 및 활성 키오스크 필터링)
   const fetchProducts = async (storeId: string) => {
     if (!storeId) return;
     setIsLoadingProducts(true);
@@ -108,7 +110,10 @@ export default function ProductManagement() {
       }
 
       const res = await fetch(query, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          ...(currentKioskId ? { 'X-Kiosk-Id': currentKioskId } : {})
+        }
       });
       if (!res.ok) throw new Error('상품 목록을 가져오지 못했습니다.');
       const data = await res.json();
@@ -120,12 +125,15 @@ export default function ProductManagement() {
     }
   };
 
-  // 3. 카테고리 & 키오스크 목록 가져오기 (매핑/비교용)
+  // 3. 카테고리 & 키오스크 목록 가져오기 (매핑/비교용 및 활성 키오스크 필터링)
   const fetchMetadata = async (storeId: string) => {
     try {
       // 카테고리
       const catRes = await fetch(`/category/store/${storeId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          ...(currentKioskId ? { 'X-Kiosk-Id': currentKioskId } : {})
+        }
       });
       if (catRes.ok) {
         const catData = await catRes.json();
@@ -153,7 +161,7 @@ export default function ProductManagement() {
       fetchProducts(selectedStore.id);
       fetchMetadata(selectedStore.id);
     }
-  }, [selectedStore, searchName, filterActive]);
+  }, [selectedStore, searchName, filterActive, currentKioskId]);
 
   // 카테고리 ID -> 카테고리명
   const getCategoryName = (catId: number) => {
@@ -512,11 +520,6 @@ export default function ProductManagement() {
                           <span className="font-bold text-gray-900 block text-base leading-tight">
                             {product.name}
                           </span>
-                          {product.buy_from && (
-                            <span className="text-xs font-semibold text-gray-400 block mt-0.5">
-                              {product.buy_from}
-                            </span>
-                          )}
                         </td>
                         {/* 5. 카테고리 */}
                         <td className="px-6 py-4 font-bold text-sm text-gray-800">

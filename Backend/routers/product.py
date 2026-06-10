@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Header
 import shutil
 import os
 import re
@@ -75,6 +75,7 @@ async def read_product_list(
     store_id: uuid.UUID,
     name: Optional[str] = None,
     is_active: Optional[bool] = None,
+    x_kiosk_id: Optional[uuid.UUID] = Header(None, alias="X-Kiosk-Id"),
     db: Session = Depends(get_db),
     current_user: UserInfo = Depends(get_current_user)
 ):
@@ -86,6 +87,10 @@ async def read_product_list(
         raise HTTPException(status_code=403, detail="본인 매장 상품만 조회 할 수 있습니다.")
 
     stmt = select(Product).where(Product.store_id == store_id)
+
+    # X-Kiosk-Id 헤더 필터 추가
+    if x_kiosk_id:
+        stmt = stmt.where(Product.kiosk_id == x_kiosk_id)
 
     # 검색 필터 지원
     if name:

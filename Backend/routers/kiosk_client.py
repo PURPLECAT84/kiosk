@@ -108,6 +108,7 @@ async def mock_payment(
         new_order = Order(
             order_no=order_no,
             store_id=request.store_id,
+            kiosk_id=request.kiosk_id, # 📝 [초보자용 멘토링] 어떤 기기에서 주문이 들어왔는지 필터링하고 매출 통계를 낼 수 있도록 결제 완료 시 kiosk_id를 함께 저장합니다.
             total_amount=request.total_amount,
             payment_method=request.payment_method,
             payment_provider=request.payment_provider,

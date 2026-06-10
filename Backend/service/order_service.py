@@ -59,6 +59,7 @@ async def create_order_transaction(db: Session, order_data: OrderCreate) -> Orde
         new_order = Order(
             order_no=order_no,
             store_id=order_data.store_id,
+            kiosk_id=order_data.kiosk_id,
             total_amount=order_data.total_amount,
             payment_method=order_data.payment_method,
             payment_provider=order_data.payment_provider,

@@ -36,6 +36,7 @@ class UserInfo(Base):
     password: Mapped[str] = mapped_column(String(255), nullable=False) #비밀번호 (해시)
     name: Mapped[str] = mapped_column(String(50), nullable=False) #이름
     phone: Mapped[str] = mapped_column(String(20)) #전화번호
+    is_business_verified: Mapped[bool] = mapped_column(Boolean, default=False) #사업자 확인여부
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )#가입일,서버시간에 맞춤
@@ -65,8 +66,10 @@ class BusinessInfo(Base):
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("user_info.id", ondelete="CASCADE"))#회원 고유아이디
     
     business_number: Mapped[str] = mapped_column(String(20), unique=True)#사업자 번호
+    business_name: Mapped[str] = mapped_column(String(100), nullable=False)#사업자명
     representative_name: Mapped[str] = mapped_column(String(50))#대표자 이름
-    representative_phone: Mapped[str] = mapped_column(String(20))#대표자 전화번호
+    representative_phone: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)#대표자 전화번호
+    store_name: Mapped[str] = mapped_column(String(100), nullable=False)#설치매장명
     
     document_url: Mapped[Optional[str]] = mapped_column(String)#사업자등록증 이미지 파일 경로
     is_verified: Mapped[bool] = mapped_column(default=False)#사업자 확인여부

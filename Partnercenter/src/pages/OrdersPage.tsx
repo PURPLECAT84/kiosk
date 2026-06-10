@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useKiosk } from '../context/KioskContext';
 import { Receipt, Calendar, CreditCard, RefreshCw, X, AlertTriangle, Eye, Loader2, Download } from 'lucide-react';
 
 interface OrderItemDetail {
@@ -33,6 +34,7 @@ interface StoreItem {
 
 export default function OrdersPage() {
   const { token } = useAuth();
+  const { currentKioskId } = useKiosk();
   const [stores, setStores] = useState<StoreItem[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string>('');
   const [orders, setOrders] = useState<OrderItem[]>([]);
@@ -79,7 +81,10 @@ export default function OrdersPage() {
     setIsLoadingOrders(true);
     try {
       const res = await fetch(`/order/?store_id=${storeId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          ...(currentKioskId ? { 'X-Kiosk-Id': currentKioskId } : {})
+        }
       });
       if (!res.ok) throw new Error('주문 목록을 가져오지 못했습니다.');
       const data = await res.json();
@@ -99,7 +104,7 @@ export default function OrdersPage() {
     if (selectedStoreId) {
       fetchOrders(selectedStoreId);
     }
-  }, [selectedStoreId]);
+  }, [selectedStoreId, currentKioskId]);
 
   // 3. 영수증 상세 내역 가져오기 (마스킹 해제)
   const handleOpenDetail = async (orderId: number) => {

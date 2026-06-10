@@ -367,6 +367,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
           headers: {"Content-Type": "application/json"},
           body: json.encode({
             "store_id": _storeId.isNotEmpty ? _storeId : "88888888-8888-8888-8888-888888888888",
+            "kiosk_id": _kioskId,
             "total_amount": _getCartTotal(),
             "payment_method": "카드",
             "order_no": phoneNumber,

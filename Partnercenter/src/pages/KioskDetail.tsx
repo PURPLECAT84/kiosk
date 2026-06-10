@@ -35,6 +35,14 @@ export default function KioskDetail() {
   // 삭제 진행 상태
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // 기기 관리자 목록 관련 상태
+  const [admins, setAdmins] = useState<any[]>([]);
+  const [isAddAdminModalOpen, setIsAddAdminModalOpen] = useState(false);
+  const [addEmail, setAddEmail] = useState('');
+  const [addRole, setAddRole] = useState('STAFF');
+  const [isAddingAdmin, setIsAddingAdmin] = useState(false);
+  const [adminError, setAdminError] = useState('');
+
   // 권한 검증: DEV 또는 HEAD 권한인지 체크
   const hasBillingEditAuth = user?.role === 'DEV' || user?.role === 'HEAD';
 
@@ -49,7 +57,6 @@ export default function KioskDetail() {
       setKiosk(data);
       setPaymentStatus(data.payment_status);
       if (data.next_payment_date) {
-        // yyyy-MM-dd 포맷팅
         setNextPaymentDate(data.next_payment_date.split('T')[0]);
       }
     } catch (err: any) {
@@ -59,8 +66,23 @@ export default function KioskDetail() {
     }
   };
 
+  const fetchAdmins = async () => {
+    try {
+      const res = await fetch(`/kiosks/${id}/admins`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAdmins(data);
+      }
+    } catch (err) {
+      console.error('Failed to fetch kiosk admins:', err);
+    }
+  };
+
   useEffect(() => {
     fetchKioskData();
+    fetchAdmins();
   }, [id, token]);
 
   // 결제 정보 수정 제출 (PATCH)
@@ -112,6 +134,68 @@ export default function KioskDetail() {
     }
   };
 
+  const handleAddAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsAddingAdmin(true);
+    setAdminError('');
+    try {
+      const res = await fetch(`/kiosks/${id}/admins`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ email: addEmail, role: addRole })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || '관리자 추가에 실패했습니다.');
+      
+      setAddEmail('');
+      setAddRole('STAFF');
+      setIsAddAdminModalOpen(false);
+      fetchAdmins();
+    } catch (err: any) {
+      setAdminError(err.message);
+    } finally {
+      setIsAddingAdmin(false);
+    }
+  };
+
+  const handleUpdateAdminRole = async (userId: string, newRole: string) => {
+    try {
+      const res = await fetch(`/kiosks/${id}/admins/${userId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ role: newRole })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || '권한 변경에 실패했습니다.');
+      fetchAdmins();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleDeleteAdmin = async (userId: string) => {
+    if (!window.confirm('정말 이 관리자를 기기 관리자 목록에서 제외하시겠습니까?')) return;
+    try {
+      const res = await fetch(`/kiosks/${id}/admins/${userId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || '관리자 제외에 실패했습니다.');
+      }
+      fetchAdmins();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex-grow p-8 flex justify-center items-center h-full">
@@ -136,6 +220,24 @@ export default function KioskDetail() {
       </div>
     );
   }
+
+  const roleLevels: Record<string, number> = {
+    'DEV': 5,
+    'HEAD': 4,
+    'MASTER': 3,
+    'MANAGER': 2,
+    'STAFF': 1
+  };
+
+  const getMyRoleOnKiosk = () => {
+    if (user?.role === 'DEV') return 'DEV';
+    if (user?.role === 'HEAD') return 'HEAD';
+    const myRec = admins.find(a => a.user_id === user?.id);
+    return myRec ? myRec.role : 'STAFF';
+  };
+
+  const myRole = getMyRoleOnKiosk();
+  const myLevel = roleLevels[myRole] || 1;
 
   return (
     <div className="p-8 max-w-4xl mx-auto space-y-8 pb-20">
@@ -249,6 +351,161 @@ export default function KioskDetail() {
           )}
         </form>
       </div>
+
+      {/* 👥 기기 관리자 리스트 카드 */}
+      <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 space-y-6">
+        <div className="flex justify-between items-center border-b border-gray-100 pb-4">
+          <div>
+            <h3 className="text-2xl font-bold text-gray-900 flex items-center">
+              <ShieldCheck className="mr-2 text-[#7C3AED]" size={26} /> 기기 관리자 설정
+            </h3>
+            <p className="text-gray-500 text-sm mt-1">이 키오스크를 스위칭하여 상품 관리 및 통계를 모니터링할 수 있는 사용자(직원 등) 목록입니다.</p>
+          </div>
+          {myLevel > 1 && (
+            <button
+              onClick={() => setIsAddAdminModalOpen(true)}
+              className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold px-4 py-2.5 rounded-xl transition-all shadow-sm cursor-pointer text-sm"
+            >
+              관리자 추가
+            </button>
+          )}
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-gray-100 text-gray-500 font-semibold text-sm">
+                <th className="py-3 px-4">이름</th>
+                <th className="py-3 px-4">이메일</th>
+                <th className="py-3 px-4">연락처</th>
+                <th className="py-3 px-4">기기 관리 권한</th>
+                {myLevel > 1 && <th className="py-3 px-4 text-center">관리</th>}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 text-gray-700">
+              {admins.length === 0 ? (
+                <tr>
+                  <td colSpan={myLevel > 1 ? 5 : 4} className="text-center py-8 text-gray-400 font-medium">
+                    등록된 관리자가 없습니다.
+                  </td>
+                </tr>
+              ) : (
+                admins.map((admin) => {
+                  const targetLevel = roleLevels[admin.role] || 1;
+                  const canEdit = myLevel > targetLevel || user?.role === 'DEV';
+                  
+                  return (
+                    <tr key={admin.user_id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="py-4 px-4 font-bold text-gray-900">{admin.name}</td>
+                      <td className="py-4 px-4 text-gray-600">{admin.email}</td>
+                      <td className="py-4 px-4 text-gray-500">{admin.phone || '-'}</td>
+                      <td className="py-4 px-4">
+                        {canEdit ? (
+                          <select
+                            value={admin.role}
+                            onChange={(e) => handleUpdateAdminRole(admin.user_id, e.target.value)}
+                            className="px-2 py-1 border border-gray-300 bg-white rounded-lg focus:ring-1 focus:ring-[#7C3AED] outline-none text-xs font-semibold text-gray-800"
+                          >
+                            <option value="STAFF">STAFF (스태프)</option>
+                            <option value="MANAGER">MANAGER (매니저)</option>
+                            <option value="MASTER">MASTER (점주/마스터)</option>
+                            {myLevel >= 4 && <option value="HEAD">HEAD (본사)</option>}
+                            {myLevel >= 5 && <option value="DEV">DEV (개발자)</option>}
+                          </select>
+                        ) : (
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                            admin.role === 'DEV' ? 'bg-purple-100 text-purple-700' :
+                            admin.role === 'MASTER' ? 'bg-red-100 text-red-700' :
+                            admin.role === 'HEAD' ? 'bg-blue-100 text-blue-700' :
+                            admin.role === 'MANAGER' ? 'bg-orange-100 text-orange-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {admin.role}
+                          </span>
+                        )}
+                      </td>
+                      {myLevel > 1 && (
+                        <td className="py-4 px-4 text-center">
+                          {(canEdit || admin.user_id === user?.id) && (
+                            <button
+                              onClick={() => handleDeleteAdmin(admin.user_id)}
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                            >
+                              제외
+                            </button>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ➕ 관리자 추가 모달 */}
+      {isAddAdminModalOpen && (
+        <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-xl space-y-6">
+            <div>
+              <h3 className="text-2xl font-bold text-gray-900">기기 관리자 추가</h3>
+              <p className="text-gray-500 text-sm mt-1">이메일로 등록된 회원을 검색하여 이 기기의 관리 권한을 부여합니다.</p>
+            </div>
+
+            {adminError && (
+              <div className="bg-red-50 text-red-700 p-4 rounded-xl text-sm font-semibold">
+                {adminError}
+              </div>
+            )}
+
+            <form onSubmit={handleAddAdmin} className="space-y-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5">회원 이메일</label>
+                <input
+                  type="email"
+                  value={addEmail}
+                  onChange={(e) => setAddEmail(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-base"
+                  placeholder="name@example.com"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1.5">관리 권한 (Role)</label>
+                <select
+                  value={addRole}
+                  onChange={(e) => setAddRole(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 bg-white rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none font-semibold text-gray-800"
+                >
+                  <option value="STAFF">STAFF (기본 권한: 상품 조회 등)</option>
+                  {myLevel >= 2 && <option value="MANAGER">MANAGER (매니저 권한)</option>}
+                  {myLevel >= 3 && <option value="MASTER">MASTER (기기 마스터 권한)</option>}
+                </select>
+              </div>
+
+              <div className="flex space-x-3 pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsAddAdminModalOpen(false)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl transition-colors cursor-pointer text-center"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={isAddingAdmin}
+                  className="flex-1 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold py-3 rounded-xl transition-colors flex justify-center items-center cursor-pointer"
+                >
+                  {isAddingAdmin ? <Loader2 className="animate-spin" size={20} /> : '추가하기'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

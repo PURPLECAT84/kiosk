@@ -1,13 +1,28 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
 // 사용자 정보
-interface User {
+export interface BusinessInfo {
+  id: number;
+  user_id: string;
+  business_number: string;
+  business_name: string;
+  representative_name: string;
+  representative_phone: string | null;
+  store_name: string;
+  document_url: string | null;
+  is_verified: boolean;
+  created_at: string;
+}
+
+export interface User {
   id: string;
   email: string;
   name: string;
   role: string;
   login_provider?: string;
   phone?: string | null;
+  is_business_verified?: boolean;
+  businesses?: BusinessInfo[];
 }
 
 interface AuthContextType {
@@ -16,6 +31,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (token: string) => void;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,6 +40,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const refreshUser = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch('/users/me', {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data);
+      }
+    } catch (err) {
+      console.error('Failed to refresh user:', err);
+    }
+  };
 
   // 토큰이 생기면 /users/me 를 호출해 내 정보를 가져옴
   useEffect(() => {
@@ -65,7 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

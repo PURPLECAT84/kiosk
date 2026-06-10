@@ -34,6 +34,7 @@ class KioskSyncResponse(BaseModel):
 
 class MockPaymentRequest(BaseModel):
     store_id: uuid.UUID
+    kiosk_id: Optional[uuid.UUID] = None # 📝 [초보자용 멘토링] 어떤 기기에서 주문이 들어왔는지 필터링하고 구분하기 위해 결제 요청 시 kiosk_id를 전달받습니다.
     total_amount: int
     payment_method: str
     payment_provider: str = "MockProvider"

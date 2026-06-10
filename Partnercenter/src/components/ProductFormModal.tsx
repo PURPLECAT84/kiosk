@@ -57,7 +57,6 @@ export default function ProductFormModal({
   const [categoryId, setCategoryId] = useState<number | ''>('');
   const [kioskId, setKioskId] = useState<string>('');
   const [barcode, setBarcode] = useState('');
-  const [buyFrom, setBuyFrom] = useState('');
   const [image, setImage] = useState('');
   const [stockManaged, setStockManaged] = useState(true);
   const [stock, setStock] = useState(0);
@@ -104,7 +103,6 @@ export default function ProductFormModal({
         setCategoryId(productToEdit.category_id);
         setKioskId(productToEdit.kiosk_id || '');
         setBarcode(productToEdit.barcode || '');
-        setBuyFrom(productToEdit.buy_from || '');
         setImage(productToEdit.image || '');
         setStockManaged(productToEdit.stock_managed);
         setStock(productToEdit.stock);
@@ -114,7 +112,6 @@ export default function ProductFormModal({
         setCategoryId('');
         setKioskId('');
         setBarcode('');
-        setBuyFrom('');
         setImage('');
         setStockManaged(true);
         setStock(0);
@@ -179,7 +176,7 @@ export default function ProductFormModal({
       category_id: Number(categoryId),
       name,
       price: Number(price),
-      buy_from: buyFrom || null,
+      buy_from: null,
       image: image || '/static/images/placeholder.png', // 기본 이미지 설정
       stock: stockManaged ? Number(stock) : 0,
       stock_managed: stockManaged,
@@ -262,32 +259,18 @@ export default function ProductFormModal({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div>
             {/* 판매 가격 */}
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1.5">판매 가격 (₩)</label>
-              <input
-                type="number"
-                value={price}
-                onChange={(e) => setPrice(Number(e.target.value))}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-base font-semibold"
-                placeholder="0"
-                min="0"
-                required
-              />
-            </div>
-
-            {/* 거래처/원산지 */}
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1.5">원산지 / 거래처</label>
-              <input
-                type="text"
-                value={buyFrom}
-                onChange={(e) => setBuyFrom(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-base font-semibold"
-                placeholder="예: 국내산 / 하남유통"
-              />
-            </div>
+            <label className="block text-sm font-bold text-gray-700 mb-1.5">판매 가격 (₩)</label>
+            <input
+              type="number"
+              value={price}
+              onChange={(e) => setPrice(Number(e.target.value))}
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-base font-semibold"
+              placeholder="0"
+              min="0"
+              required
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">

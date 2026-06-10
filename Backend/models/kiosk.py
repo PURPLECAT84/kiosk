@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from models.store import Store
     from models.product import Product
     from models.category import Category
+    from models.kiosk_admin import KioskAdmin
 
 class Kiosk(Base):
     __tablename__ = "kiosks"
@@ -26,3 +27,4 @@ class Kiosk(Base):
     store: Mapped["Store"] = relationship("Store", back_populates="kiosks")
     products = relationship("Product", back_populates="kiosk", cascade="all, delete-orphan")
     categories = relationship("Category", back_populates="kiosk", cascade="all, delete-orphan")
+    kiosk_admins = relationship("KioskAdmin", back_populates="kiosk", cascade="all, delete-orphan")

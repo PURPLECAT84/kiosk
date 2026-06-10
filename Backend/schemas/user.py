@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr, ConfigDict, Field, field_validator, ValidationInfo #EmailStr 을 사용하기 위해선 email-validator 설치 필요
 from datetime import datetime
+from typing import List
 import uuid
 import re
 from models.user import UserRole, UserStatus
@@ -48,6 +49,37 @@ class UserPasswordUpdate(BaseModel):
 class UserDelete(BaseModel):
     password : str # 계정 삭제를 위한 비밀번호 확인
 
+class BusinessInfoResponse(BaseModel):
+    id: int
+    user_id: uuid.UUID
+    business_number: str
+    business_name: str
+    representative_name: str
+    representative_phone: str | None = None
+    store_name: str
+    document_url: str | None = None
+    is_verified: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes = True)
+
+class BusinessInfoCreate(BaseModel):
+    business_number: str = Field(..., description="사업자 번호")
+    business_name: str = Field(..., description="사업자명")
+    representative_name: str = Field(..., description="대표자 이름")
+    representative_phone: str | None = Field(None, description="대표자 전화번호")
+    store_name: str = Field(..., description="설치매장명")
+    document_url: str | None = Field(None, description="사업자등록증 이미지 파일 경로")
+
+    @field_validator("store_name")
+    @classmethod
+    def validate_store_name(cls, v: str) -> str:
+        # 공백 제거
+        cleaned = "".join(v.split())
+        if not cleaned:
+            raise ValueError("설치매장명은 공백일 수 없습니다.")
+        return cleaned
+
 class UserResponse(BaseModel):
     id : uuid.UUID # 회원 고유아이디
     email : EmailStr # 이메일
@@ -55,9 +87,11 @@ class UserResponse(BaseModel):
     phone : str | None = None # 전화번호
     role : UserRole # 권한 (DEV, HEAD, MASTER, MANAGER, STAFF)
     status : UserStatus # 상태 (PENDING, ACTIVE, BANNED)
-    store_id : uuid.UUID | None = None # 소속 매장아이디 (복수가능한 경우도 고려)
+    store_id : uuid.UUID | None = None # 소속 매장아이디
+    is_business_verified: bool = False # 사업자 확인여부
     created_at : datetime # 가입일, 서버시간 기준
     login_provider: str | None = "email" # 이메일, 카카오, 구글 등 현재 로그인 수단
+    businesses: List[BusinessInfoResponse] = [] # 등록된 사업자 목록
 
     model_config = ConfigDict(from_attributes = True) # SQLAlchemy 모델(DB 객체)을 Pydantic 모델로 변환 허용
 
@@ -101,8 +135,10 @@ class UserManagementResponse(BaseModel):
     phone: str | None = None # 전화번호
     role: UserRole # 권한
     status: UserStatus # 상태
+    is_business_verified: bool = False # 사업자 확인여부
     created_at: datetime # 가입일
     store_names_summary: str = Field(..., description="소유 매장명 요약 정보 (예: '모키반점 외 2개')")
     kiosks_summary: UserManagementKioskSummary = Field(..., description="운영 중인 키오스크 현황 (활성/미활성 개수)")
+    businesses: List[BusinessInfoResponse] = [] # 등록된 사업자 목록
 
     model_config = ConfigDict(from_attributes = True)

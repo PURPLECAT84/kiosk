@@ -4,8 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import { Users, Loader2, Store, Monitor } from 'lucide-react';
 
 interface KioskSummary {
-  active_count: int;
-  inactive_count: int;
+  active_count: number;
+  inactive_count: number;
 }
 
 interface UserItem {
@@ -15,6 +15,7 @@ interface UserItem {
   phone: string | null;
   role: string;
   status: string;
+  is_business_verified: boolean;
   created_at: string;
   store_names_summary: string;
   kiosks_summary: KioskSummary;
@@ -45,6 +46,24 @@ export default function UserManagement() {
       setError(err.message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleVerifyToggle = async (userId: string, currentStatus: boolean) => {
+    try {
+      const res = await fetch(`/users/${userId}/verify-business?is_verified=${!currentStatus}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || '사업자 승인 상태 변경에 실패했습니다.');
+      }
+      fetchUsers();
+    } catch (err: any) {
+      alert(err.message);
     }
   };
 
@@ -94,6 +113,7 @@ export default function UserManagement() {
                 <th className="px-6 py-4">전화번호</th>
                 <th className="px-6 py-4">매장 명</th>
                 <th className="px-6 py-4">운영 키오스크 수</th>
+                <th className="px-6 py-4">사업자 확인</th>
                 <th className="px-6 py-4">권한</th>
                 <th className="px-6 py-4">가입일</th>
               </tr>
@@ -101,7 +121,7 @@ export default function UserManagement() {
             <tbody className="divide-y divide-gray-100 text-gray-700 text-base">
               {users.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-gray-400 font-medium">
+                  <td colSpan={9} className="text-center py-12 text-gray-400 font-medium">
                     가입된 사용자가 없습니다.
                   </td>
                 </tr>
@@ -141,6 +161,22 @@ export default function UserManagement() {
                           <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-yellow-50 text-yellow-600">
                             미활성 {u.kiosks_summary.inactive_count ?? 0}
                           </span>
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      {u.role === 'STAFF' ? (
+                        <span className="text-gray-400 text-sm">해당 없음</span>
+                      ) : (
+                        <button
+                          onClick={() => handleVerifyToggle(u.id, u.is_business_verified)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm ${
+                            u.is_business_verified
+                              ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          }`}
+                        >
+                          {u.is_business_verified ? '확인 완료' : '대기 / 미인증'}
                         </button>
                       )}
                     </td>

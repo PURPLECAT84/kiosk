@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useKiosk } from '../context/KioskContext';
 import { Monitor, Plus, Calendar, Loader2 } from 'lucide-react';
 
 interface KioskItem {
@@ -25,6 +26,7 @@ interface StoreItem {
 
 export default function KioskManagement() {
   const { token, user } = useAuth();
+  const { currentKioskId, setCurrentKioskId } = useKiosk();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [kiosks, setKiosks] = useState<KioskItem[]>([]);
@@ -56,8 +58,8 @@ export default function KioskManagement() {
       const kiosksData = await kiosksRes.json();
       setKiosks(kiosksData);
 
-      // 2. 매장 목록 가져오기 (기기 등록용 dropdown 소스)
-      const storesRes = await fetch('/store/', {
+      // 2. 사업자 확인 완료 매장 목록 가져오기 (기기 등록용 dropdown 소스)
+      const storesRes = await fetch('/kiosks/active-stores', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (storesRes.ok) {
@@ -221,19 +223,25 @@ export default function KioskManagement() {
                 </tr>
               ) : (
                 filteredKiosks.map((kiosk) => (
-                  <tr key={kiosk.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 font-mono font-bold text-[#7C3AED]">
+                  <tr 
+                    key={kiosk.id} 
+                    onClick={() => setCurrentKioskId(kiosk.id)}
+                    className={`hover:bg-gray-50 transition-colors cursor-pointer ${
+                      kiosk.id === currentKioskId ? 'bg-[#7C3AED]/5 border-l-4 border-[#7C3AED]' : ''
+                    }`}
+                  >
+                    <td className="px-6 py-4 font-mono font-bold text-[#7C3AED]" onClick={(e) => e.stopPropagation()}>
                       <button 
                         onClick={() => navigate(`/kiosks/${kiosk.id}`)}
-                        className="hover:underline cursor-pointer"
+                        className="hover:underline cursor-pointer text-left"
                       >
                         {kiosk.code}
                       </button>
                     </td>
-                    <td className="px-6 py-4 font-semibold text-gray-900">
+                    <td className="px-6 py-4 font-semibold text-gray-900" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => navigate(`/stores/${kiosk.store_id}`)}
-                        className="hover:underline cursor-pointer"
+                        className="hover:underline cursor-pointer text-left"
                       >
                         {kiosk.store_name || '-'}
                       </button>

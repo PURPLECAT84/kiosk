@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { User, Phone, Lock, KeyRound, Mail, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { User, Phone, Lock, KeyRound, Mail, CheckCircle2, ShieldAlert, Briefcase, Trash2, Plus, FileText, Loader2, Upload, X, Clock } from 'lucide-react';
 
 export default function ProfilePage() {
-  const { user, token } = useAuth();
+  const { user, token, refreshUser } = useAuth();
   
   // 프로필 폼 상태
   const [name, setName] = useState(user?.name || '');
@@ -15,6 +15,18 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState('');
   const [newPasswordCheck, setNewPasswordCheck] = useState('');
   const [passwordMsg, setPasswordMsg] = useState({ text: '', type: '' });
+
+  // 사업자 등록 상태
+  const [bizNumber, setBizNumber] = useState('');
+  const [bizName, setBizName] = useState('');
+  const [repName, setRepName] = useState(user?.name || '');
+  const [repPhone, setRepPhone] = useState(user?.phone || '');
+  const [storeName, setStoreName] = useState('');
+  const [docUrl, setDocUrl] = useState('');
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [bizError, setBizError] = useState('');
+  const [bizSuccess, setBizSuccess] = useState('');
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   if (!user) return null;
 
@@ -80,6 +92,110 @@ export default function ProfilePage() {
       setTimeout(() => setPasswordMsg({ text: '', type: '' }), 3000);
     } catch (err: any) {
       setPasswordMsg({ text: err.message, type: 'error' });
+    }
+  };
+
+  const handleDocUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      setBizError('이미지 파일 크기는 2MB 이하여야 합니다.');
+      return;
+    }
+
+    setUploadingDoc(true);
+    setBizError('');
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('/products/image', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || '사업자등록증 업로드에 실패했습니다.');
+      setDocUrl(data.image_url);
+    } catch (err: any) {
+      setBizError(err.message);
+    } finally {
+      setUploadingDoc(false);
+    }
+  };
+
+  const handleBizSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBizError('');
+    setBizSuccess('');
+
+    if (!docUrl) {
+      setBizError('사업자등록증 이미지를 업로드해 주세요.');
+      return;
+    }
+
+    const cleanedStoreName = storeName.replace(/\s+/g, '');
+    if (!cleanedStoreName) {
+      setBizError('설치매장명은 공백일 수 없습니다.');
+      return;
+    }
+
+    try {
+      const res = await fetch('/users/me/business', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          business_number: bizNumber,
+          business_name: bizName,
+          representative_name: repName,
+          representative_phone: repPhone || null,
+          store_name: cleanedStoreName,
+          document_url: docUrl
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || '사업자 등록에 실패했습니다.');
+
+      setBizSuccess('사업자 정보가 성공적으로 등록되었습니다.');
+      setBizNumber('');
+      setBizName('');
+      setStoreName('');
+      setDocUrl('');
+      
+      await refreshUser();
+      setTimeout(() => setBizSuccess(''), 3000);
+    } catch (err: any) {
+      setBizError(err.message);
+    }
+  };
+
+  const handleBizDelete = async (bizId: number) => {
+    if (!window.confirm('정말 이 사업자 등록 정보를 삭제하시겠습니까? 해당 매장 정보도 함께 제거됩니다.')) return;
+    setDeletingId(bizId);
+    try {
+      const res = await fetch(`/users/me/business/${bizId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || '삭제에 실패했습니다.');
+      }
+      await refreshUser();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -248,6 +364,198 @@ export default function ProfilePage() {
             소셜 연동 계정({user.login_provider === 'kakao' ? '카카오' : '구글'})으로 로그인하셨습니다.<br />
             비밀번호 관리는 해당 소셜 서비스에서 진행해 주세요.
           </p>
+        </div>
+      )}
+
+      {/* 🏢 사업자 정보 설정 섹션 (STAFF는 미노출) */}
+      {user.role !== 'STAFF' && (
+        <div className="bg-white rounded-2xl shadow-sm p-8 space-y-8">
+          <div className="flex items-center space-x-2 border-b border-gray-100 pb-4">
+            <Briefcase className="text-[#7C3AED]" size={24} />
+            <h3 className="text-xl font-bold text-gray-900">사업자 정보 설정</h3>
+          </div>
+
+          {/* 등록된 사업자 리스트 */}
+          <div className="space-y-4">
+            <h4 className="font-bold text-gray-800 text-sm">등록된 사업자 정보</h4>
+            {!user.businesses || user.businesses.length === 0 ? (
+              <p className="text-gray-400 text-sm py-8 text-center border border-dashed border-gray-200 rounded-xl">
+                등록된 사업자 정보가 없습니다. 아래 양식을 작성해 새로 추가해 주세요.
+              </p>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {user.businesses.map((biz) => (
+                  <div key={biz.id} className="p-5 border border-gray-200 rounded-xl bg-gray-50 flex justify-between items-start shadow-sm">
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2 flex-wrap gap-2">
+                        <span className="font-bold text-gray-900 text-lg">{biz.business_name}</span>
+                        <span className="text-sm text-gray-400">({biz.business_number})</span>
+                        {biz.is_verified ? (
+                          <span className="bg-green-100 text-green-700 text-xs font-extrabold px-3 py-1 rounded-full flex items-center">
+                            <CheckCircle2 size={12} className="mr-1" /> 승인 완료
+                          </span>
+                        ) : (
+                          <span className="bg-yellow-100 text-yellow-700 text-xs font-extrabold px-3 py-1 rounded-full flex items-center">
+                            <Clock size={12} className="mr-1" /> 승인 대기중
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <p>대표자명: <span className="font-semibold text-gray-800">{biz.representative_name}</span> {biz.representative_phone && `| 연락처: ${biz.representative_phone}`}</p>
+                        <p>설치 매장: <span className="font-semibold text-[#7C3AED]">{biz.store_name}</span></p>
+                      </div>
+                      {biz.document_url && (
+                        <a
+                          href={biz.document_url.startsWith('http') ? biz.document_url : `http://localhost:8000${biz.document_url}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-[#7C3AED] hover:text-[#6D28D9] font-bold block mt-2 hover:underline"
+                        >
+                          사업자등록증 사본 보기
+                        </a>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleBizDelete(biz.id)}
+                      disabled={deletingId === biz.id}
+                      className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                    >
+                      {deletingId === biz.id ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* 신규 사업자 등록 양식 */}
+          <form onSubmit={handleBizSubmit} className="space-y-6 max-w-lg border-t border-gray-100 pt-6">
+            <h4 className="font-bold text-gray-800 text-sm flex items-center">
+              <Plus size={18} className="mr-1 text-[#7C3AED]" /> 신규 사업자 정보 추가
+            </h4>
+
+            {bizError && (
+              <div className="bg-red-50 text-red-700 p-4 rounded-xl text-sm font-semibold">
+                {bizError}
+              </div>
+            )}
+
+            {bizSuccess && (
+              <div className="bg-green-50 text-green-700 p-4 rounded-xl text-sm font-semibold">
+                {bizSuccess}
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">사업자 등록번호</label>
+                <input
+                  type="text"
+                  value={bizNumber}
+                  onChange={(e) => setBizNumber(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-base"
+                  placeholder="000-00-00000"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">사업자명</label>
+                <input
+                  type="text"
+                  value={bizName}
+                  onChange={(e) => setBizName(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-base"
+                  placeholder="예: 모키반점"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">대표자 이름</label>
+                <input
+                  type="text"
+                  value={repName}
+                  onChange={(e) => setRepName(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-base"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">대표자 전화번호</label>
+                <input
+                  type="text"
+                  value={repPhone}
+                  onChange={(e) => setRepPhone(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-base"
+                  placeholder="선택 사항"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">설치 매장명 (공백 불가)</label>
+              <input
+                type="text"
+                value={storeName}
+                onChange={(e) => setStoreName(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-base"
+                placeholder="예: 모키반점강남점 (공백없이 입력)"
+                required
+              />
+            </div>
+
+            {/* 사업자등록증 이미지 업로드 */}
+            <div>
+              <label className="block text-sm font-bold text-gray-700 mb-2">사업자등록증 사본 이미지 (최대 2MB)</label>
+              <div className="flex items-center space-x-4">
+                <input
+                  type="file"
+                  onChange={handleDocUpload}
+                  accept="image/*"
+                  id="biz-doc-upload"
+                  className="hidden"
+                />
+                <label
+                  htmlFor="biz-doc-upload"
+                  className="bg-gray-50 hover:bg-gray-100 text-gray-700 font-bold px-4 py-4 rounded-xl transition-all text-sm flex flex-col items-center justify-center border-2 border-dashed border-gray-300 w-32 h-32 cursor-pointer"
+                >
+                  {uploadingDoc ? (
+                    <Loader2 className="animate-spin text-[#7C3AED]" size={24} />
+                  ) : (
+                    <>
+                      <Upload size={24} className="text-gray-400 mb-1.5" />
+                      <span className="text-xs text-gray-500">이미지 업로드</span>
+                    </>
+                  )}
+                </label>
+
+                {docUrl && (
+                  <div className="relative w-32 h-32 rounded-xl overflow-hidden border border-gray-200 group">
+                    <img src={docUrl.startsWith('http') ? docUrl : `http://localhost:8000${docUrl}`} alt="Business doc" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/40 flex justify-center items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        type="button"
+                        onClick={() => setDocUrl('')}
+                        className="bg-white/80 p-1.5 rounded-full hover:bg-white text-gray-900 transition-all cursor-pointer"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={uploadingDoc || deletingId !== null}
+              className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold py-3.5 rounded-xl transition-colors flex justify-center items-center cursor-pointer shadow-sm text-base"
+            >
+              사업자 정보 및 매장 추가
+            </button>
+          </form>
         </div>
       )}
     </div>
