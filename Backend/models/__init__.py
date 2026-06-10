@@ -1,5 +1,4 @@
 from .user import UserInfo
-from .store import Store
 from .kiosk import Kiosk
 from .shelve import Shelve
 from .category import Category

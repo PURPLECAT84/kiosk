@@ -1,4 +1,6 @@
+# PM/Scripts/generate_dummy_data.py
 import sys
+import os
 import uuid
 import random
 from datetime import datetime, timedelta
@@ -6,9 +8,13 @@ from faker import Faker
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
+# Backend 폴더를 Python 경로에 추가하여 모듈을 임포트할 수 있도록 설정
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'Backend'))
+
 from database import engine, DB_session, Base
-from models.user import User
-from models.store import Store
+from models.user import UserInfo, UserRole, UserStatus, BusinessInfo
+from models.kiosk import Kiosk
+from models.kiosk_admin import KioskAdmin
 from models.shelve import Shelve
 from models.category import Category
 from models.product import Product
@@ -18,7 +24,7 @@ from core.security import get_password_hash
 
 fake = Faker('ko_KR')
 
-# 1. Base Product Data
+# 1. Base Product Data (원산지/거래처 buy_from은 제외)
 PRODUCT_BASE_DATA = [
     # 스낵류
     ("새우깡", "스낵", 1500), ("포카칩", "스낵", 1700), ("양파링", "스낵", 1500),
@@ -32,7 +38,7 @@ PRODUCT_BASE_DATA = [
     ("허니버터칩", "스낵", 1700),
     # 음료류
     ("코카콜라", "음료", 2000), ("칠성사이다", "음료", 1800), ("환타 오렌지", "음료", 1500),
-    ("조지아 오리지널", "음료", 1200), ("레쓰비", "음료", 1000), ("칸타타", "음료", 2500),
+    ("조지아 오리지널", "음료", 1200), ("레써비", "음료", 1000), ("칸타타", "음료", 2500),
     ("비타500", "음료", 1000), ("박카스D", "음료", 900), ("오로나민C", "음료", 1200),
     ("포카리스웨트", "음료", 2000), ("토레타", "음료", 2000), ("게토레이", "음료", 1800),
     ("파워에이드", "음료", 2200), ("몬스터 에너지", "음료", 2500), ("핫식스", "음료", 1500),
@@ -54,28 +60,13 @@ PRODUCT_BASE_DATA = [
     ("돼지바", "아이스크림", 1200), ("바밤바", "아이스크림", 1200), ("누가바", "아이스크림", 1200),
     ("투게더", "아이스크림", 7000), ("붕어싸만코", "아이스크림", 2000), ("월드콘", "아이스크림", 2000),
     ("부라보콘", "아이스크림", 2000), ("구구콘", "아이스크림", 2000), ("설레임", "아이스크림", 1500),
-    ("더위사냥", "아이스크림", 1500), ("빠삐코", "아이스크림", 1200), ("탱크보이", "아이스크림", 1200),
-    # 신선식품(간편식)
-    ("참치마요 삼각김밥", "간편식", 1200), ("전주비빔 삼각김밥", "간편식", 1300), ("스팸김치 삼각김밥", "간편식", 1300),
-    ("치킨너겟 삼각", "간편식", 1500), ("제육볶음 도시락", "간편식", 4500), ("돈까스 도시락", "간편식", 5000),
-    ("치킨마요 도시락", "간편식", 4800), ("햄치즈 샌드위치", "간편식", 2500), ("에그스프레드 샌드위치", "간편식", 2800),
-    ("불고기버거", "간편식", 3000), ("치킨버거", "간편식", 3200), ("핫도그", "간편식", 2000),
-    ("구운계란 2구", "간편식", 2200), ("스트링치즈", "간편식", 1500), ("맥스봉", "간편식", 2000),
-    ("천하장사", "간편식", 1800), ("훈제닭가슴살", "간편식", 3500),
-    # 생필품
-    ("물티슈 100매", "생필품", 2000), ("두루마리휴지 1롤", "생필품", 1000), ("여행용티슈", "생필품", 800),
-    ("샴푸 린스 세트 미니", "생필품", 4000), ("칫솔 1개", "생필품", 1500), ("치약 50g", "생필품", 1500),
-    ("비누 1알", "생필품", 1200), ("바디워시 미니", "생필품", 2500), ("면도기", "생필품", 2000),
-    ("생리대 중형", "생필품", 4000), ("스타킹", "생필품", 3500), ("건전지 AA 2알", "생필품", 3000),
-    ("건전지 AAA 2알", "생필품", 3000), ("라이터", "생필품", 800), ("우산", "생필품", 6000),
-    ("우의", "생필품", 4000), ("일회용 마스크 5매", "생필품", 3000), ("밴드 10매", "생필품", 1500),
-    ("마데카솔", "생필품", 6000), ("종이컵 1줄", "생필품", 1500), ("나무젓가락 10팩", "생필품", 1000)
+    ("더위사냥", "아이스크림", 1500), ("빠삐코", "아이스크림", 1200), ("탱크보이", "아이스크림", 1200)
 ]
 
 def main():
     print("🚀 데이터 생성을 시작합니다...")
     
-    # DB 테이블 생성 방치
+    # DB 테이블 생성 보장
     Base.metadata.create_all(bind=engine)
     
     db: Session = DB_session()
@@ -86,25 +77,34 @@ def main():
         # 1. User 30명 생성
         print(">> User 30명 생성 중...")
         users = []
-        user_roles = ["company"] * 6 + ["owner"] * 12 + ["manager"] * 12
+        user_roles = (
+            [UserRole.DEV] * 2 + 
+            [UserRole.HEAD] * 4 + 
+            [UserRole.MANAGER] * 18 + 
+            [UserRole.STAFF] * 6
+        )
         random.shuffle(user_roles)
         
         for i, role in enumerate(user_roles):
-            email = f"{role}{i+1}@test.com"
-            stmt = select(User).where(User.email == email)
+            email = f"{role.value.lower()}{i+1}@test.com"
+            stmt = select(UserInfo).where(UserInfo.email == email)
             existing_user = db.scalars(stmt).first()
             if existing_user:
                 users.append(existing_user)
                 continue
                 
-            new_user = User(
+            is_verified = (role == UserRole.MANAGER and random.choice([True, False])) or role in [UserRole.DEV, UserRole.HEAD]
+            status_val = UserStatus.ACTIVE if is_verified else UserStatus.PENDING
+            
+            new_user = UserInfo(
                 email=email,
                 password=common_password,
                 name=fake.name(),
                 phone=fake.phone_number(),
-                address=fake.address(),
-                authority=role,
-                joined_date=fake.date_time_between(start_date="-1y", end_date="now")
+                role=role,
+                status=status_val,
+                is_business_verified=is_verified,
+                created_at=fake.date_time_between(start_date="-1y", end_date="now")
             )
             db.add(new_user)
             users.append(new_user)
@@ -113,52 +113,89 @@ def main():
         for u in users:
             db.refresh(u)
         print(f"✅ User 30명 정상 확인 (총 {len(users)}명 가용)")
-        
-        # 2. Store 50개 생성
-        print(">> Store 50개 생성 중...")
-        stores = []
-        store_types = ["convenience", "cafe", "restaurant", "retail"]
-        target_stores = 50
-        
-        # 이미 있는 더미 매장이 있는지 확인
-        stmt = select(Store).where(Store.name.contains("점"))
-        existing_stores = db.scalars(stmt).all()
-        stores.extend(existing_stores)
-        
-        for i in range(target_stores - len(existing_stores)):
-            user = random.choice(users) 
-            store_name = f"{fake.company()} {fake.city()}점"
-            
-            stmt = select(Store).where(Store.name == store_name)
+
+        # 2. BusinessInfo 등록 및 승인 (MANAGER 유저 대상)
+        print(">> BusinessInfo 등록 중...")
+        managers = [u for u in users if u.role == UserRole.MANAGER]
+        for idx, m in enumerate(managers):
+            stmt = select(BusinessInfo).where(BusinessInfo.user_id == m.id)
             if db.scalars(stmt).first():
                 continue
             
-            store = Store(
-                user_id=user.id,
-                type=random.choice(store_types),
-                name=store_name,
-                address=fake.address(),
-                created_date=fake.date_time_between(start_date="-1y", end_date="now")
+            store_name = f"{fake.company()} {fake.city()}점"
+            business = BusinessInfo(
+                user_id=m.id,
+                business_number=fake.numerify("###-##-#####"),
+                business_name=f"(주){fake.company_suffix()}",
+                representative_name=m.name,
+                representative_phone=m.phone,
+                store_name=store_name,
+                document_url=f"/static/images/doc_{idx}.png",
+                is_verified=m.is_business_verified
             )
-            db.add(store)
-            stores.append(store)
+            db.add(business)
+        db.commit()
+        print("✅ BusinessInfo 생성 완료")
+        
+        # 3. Kiosk 50개 생성
+        print(">> Kiosk 50개 생성 중...")
+        kiosks = []
+        kiosk_types = ["Store", "Restaurant"]
+        target_kiosks = 50
+        
+        # 이미 있는 더미 키오스크가 있는지 확인
+        stmt = select(Kiosk).where(Kiosk.name.contains("기기") | Kiosk.name.contains("주문"))
+        existing_kiosks = db.scalars(stmt).all()
+        kiosks.extend(existing_kiosks)
+        
+        verified_managers = [m for m in managers if m.is_business_verified]
+        if not verified_managers:
+            verified_managers = managers # Fallback
+            
+        for i in range(target_kiosks - len(existing_kiosks)):
+            owner = random.choice(verified_managers)
+            kiosk_name = f"{owner.businesses[0].store_name if owner.businesses else '가맹매장'} 기기 {i+1}"
+            
+            chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+            code = "KS" + "".join(random.choice(chars) for _ in range(6))
+            
+            kiosk = Kiosk(
+                code=code,
+                user_id=owner.id,
+                name=kiosk_name,
+                model_name=f"K-MOKI-{random.choice(['A1', 'B2', 'C3'])}",
+                type=random.choice(kiosk_types),
+                status="OPERATING",
+                payment_status="NORMAL",
+                created_at=fake.date_time_between(start_date="-1y", end_date="now")
+            )
+            db.add(kiosk)
+            db.flush()
+            
+            # KioskAdmin 생성
+            admin = KioskAdmin(
+                kiosk_id=kiosk.id,
+                user_id=owner.id,
+                role="MASTER"
+            )
+            db.add(admin)
+            kiosks.append(kiosk)
             
         db.commit()
-        for s in stores: db.refresh(s)
-        print(f"✅ Store {len(stores)}개 확보 완료")
+        for k in kiosks: db.refresh(k)
+        print(f"✅ Kiosk {len(kiosks)}개 확보 완료")
         
-        # 3. 매장당 Shelve, Category, Product 할당
+        # 4. 키오스크당 Shelve, Category, Product 할당
         print(">> 매대, 카테고리, 상품 데이터 생성 중...")
-        # 상품이 하나도 없는 매장에만 생성하도록 필터링 (중복 실행 방지)
-        for store in stores:
-            stmt = select(Product).where(Product.store_id == store.id).limit(1)
+        for kiosk in kiosks:
+            stmt = select(Product).where(Product.kiosk_id == kiosk.id).limit(1)
             if db.scalars(stmt).first():
-                continue # 이미 상품이 추가된 매장 패스
+                continue # 이미 상품이 추가된 키오스크 패스
                 
             for sh_idx in range(random.randint(1, 2)):
                 TerminalString = f"T_{fake.ean8()}"
                 shelve = Shelve(
-                    store_id=store.id,
+                    kiosk_id=kiosk.id,
                     name=f"매대-{sh_idx+1}",
                     terminal_id=TerminalString[:20],
                     business_number=fake.numerify("###-##-#####"),
@@ -172,7 +209,7 @@ def main():
                 for cat_name in cats:
                     category = Category(
                         shelve_id=shelve.id,
-                        store_id=store.id,
+                        kiosk_id=kiosk.id,
                         name=cat_name
                     )
                     db.add(category)
@@ -184,13 +221,12 @@ def main():
                     for prod in selected_prods:
                         product = Product(
                             category_id=category.id,
-                            store_id=store.id,
+                            kiosk_id=kiosk.id,
                             shelve_id=shelve.id,
                             barcode=fake.ean13(),
                             name=prod[0],
                             price=prod[2],
-                            buy_from="본사물류",
-                            image="https://via.placeholder.com/150", 
+                            image="/static/images/default_prod.png", 
                             stock=random.randint(50, 200),
                             is_active=True
                         )
@@ -199,7 +235,7 @@ def main():
         
         print("✅ 매대, 카테고리, 상품 데이터 생성 완료")
         
-        # 4. Order & OrderItem 생성
+        # 5. Order & OrderItem 생성
         print(">> 시작일~종료일 주문 데이터 생성 중... 시간이 조금 걸립니다 ⏳")
         start_date = datetime(2026, 1, 1)
         end_date = datetime(2026, 3, 31)
@@ -210,26 +246,26 @@ def main():
         
         total_orders_created = 0
         
-        # 각 매장당 주문이 없으면 생성
-        for store in stores:
-            stmt = select(Order).where(Order.store_id == store.id).limit(1)
+        # 각 키오스크당 주문이 없으면 생성
+        for kiosk in kiosks:
+            stmt = select(Order).where(Order.kiosk_id == kiosk.id).limit(1)
             if db.scalars(stmt).first():
-                continue # 이미 주문이 생성된 매장은 패스
+                continue # 이미 주문이 생성된 키오스크 패스
                 
-            stmt = select(Product).where(Product.store_id == store.id)
-            store_products = db.scalars(stmt).all()
+            stmt = select(Product).where(Product.kiosk_id == kiosk.id)
+            kiosk_products = db.scalars(stmt).all()
             
-            if not store_products: 
+            if not kiosk_products: 
                 continue
                 
-            num_orders = random.randint(80, 120)
+            num_orders = random.randint(30, 50) # 각 키오스크당 주문 생성량 조절
             
             for _ in range(num_orders):
                 random_days = random.randint(0, delta_days)
                 random_seconds = random.randint(0, 86400)
                 order_date = start_date + timedelta(days=random_days, seconds=random_seconds)
                 
-                chosen_prods = random.sample(store_products, k=random.randint(1, min(5, len(store_products))))
+                chosen_prods = random.sample(kiosk_products, k=random.randint(1, min(5, len(kiosk_products))))
                 
                 items_data = []
                 total_amount = 0
@@ -239,7 +275,7 @@ def main():
                     total_amount += (cp.price * qty)
                     
                 order = Order(
-                    store_id=store.id,
+                    kiosk_id=kiosk.id,
                     total_amount=total_amount,
                     payment_method=random.choice(payment_methods),
                     payment_provider=random.choice(payment_providers),
@@ -260,8 +296,8 @@ def main():
                 db.add(order)
                 total_orders_created += 1
             
-            if (stores.index(store) + 1) % 5 == 0:
-                print(f"   [{stores.index(store) + 1}/{len(stores)}] 매장 (총 {total_orders_created}건 생성중...)")
+            if (kiosks.index(kiosk) + 1) % 5 == 0:
+                print(f"   [{kiosks.index(kiosk) + 1}/{len(kiosks)}] 키오스크 (총 {total_orders_created}건 생성중...)")
                 db.commit()
         
         db.commit()
@@ -270,6 +306,8 @@ def main():
         
     except Exception as e:
         print(f"❌ 데이터 생성 중 오류 발생: {e}")
+        import traceback
+        traceback.print_exc()
         db.rollback()
     finally:
         db.close()

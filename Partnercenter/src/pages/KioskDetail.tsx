@@ -6,7 +6,7 @@ import { ArrowLeft, Trash2, Edit, Calendar, ShieldCheck, Loader2 } from 'lucide-
 interface KioskItem {
   id: string;
   code: string;
-  store_id: string;
+  user_id: string;
   store_name: string | null;
   name: string;
   model_name: string | null;
@@ -127,7 +127,7 @@ export default function KioskDetail() {
       });
       if (!res.ok) throw new Error('기기 삭제에 실패했습니다.');
       
-      navigate(`/stores/${kiosk?.store_id}`); // 삭제 성공 시 소속 매장 상세로 귀환
+      navigate('/kiosks'); // 삭제 성공 시 키오스크 목록으로 귀환
     } catch (err: any) {
       alert(err.message);
       setIsDeleting(false);
@@ -243,11 +243,11 @@ export default function KioskDetail() {
     <div className="p-8 max-w-4xl mx-auto space-y-8 pb-20">
       {/* 뒤로가기 버튼 */}
       <button
-        onClick={() => navigate(`/stores/${kiosk.store_id}`)}
+        onClick={() => navigate('/kiosks')}
         className="flex items-center space-x-2 text-gray-600 hover:text-[#7C3AED] font-semibold transition-colors cursor-pointer"
       >
         <ArrowLeft size={20} />
-        <span>매장 상세 보기로</span>
+        <span>키오스크 목록으로 돌아가기</span>
       </button>
 
       {/* 기기 정보 요약 카드 */}
@@ -265,7 +265,7 @@ export default function KioskDetail() {
               </span>
             </div>
             <h1 className="text-3xl font-extrabold text-gray-900">{kiosk.name}</h1>
-            <p className="text-gray-500 font-medium">소속 매장: <span className="text-[#7C3AED] font-bold">{kiosk.store_name}</span></p>
+            <p className="text-gray-500 font-medium">가맹 매장명: <span className="text-[#7C3AED] font-bold">{kiosk.store_name}</span></p>
           </div>
 
           <button

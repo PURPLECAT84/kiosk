@@ -5,7 +5,7 @@ import re
 from sqlalchemy import select, func, desc, and_
 from sqlalchemy.orm import Session
 from database import get_db
-from models.store import Store
+from models.kiosk import Kiosk
 from models.user import UserInfo, UserRole
 from models.category import Category
 from models.product import Product
@@ -16,6 +16,7 @@ import uuid
 
 router = APIRouter()
 allowed_roles = [UserRole.DEV, UserRole.HEAD, UserRole.MASTER, UserRole.MANAGER]
+AutherList = [UserRole.DEV, UserRole.HEAD, UserRole.MASTER]
 
 @router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED, summary="상품등록")
 async def upload_product(
@@ -27,35 +28,36 @@ async def upload_product(
     if not target_category:
         raise HTTPException(status_code=404, detail="카테고리를 찾을 수 없습니다.")
 
-    target_store = db.get(Store, target_category.store_id)
-    if uploader.role not in [UserRole.MASTER, UserRole.DEV] and uploader.id != target_store.user_id:
-        raise HTTPException(status_code=403, detail="본인 매장에만 상품을 업로드 할 수 있습니다.")
+    target_kiosk = db.get(Kiosk, target_category.kiosk_id)
+    if not target_kiosk:
+        raise HTTPException(status_code=404, detail="해당 키오스크를 찾을 수 없습니다.")
+
+    if uploader.role not in AutherList and uploader.id != target_kiosk.user_id:
+        raise HTTPException(status_code=403, detail="본인 키오스크에만 상품을 업로드 할 수 있습니다.")
     
     # 중복 확인
     existing_product = db.scalar(
         select(Product).where(
             Product.name == upload.name, 
-            Product.store_id == target_category.store_id
+            Product.kiosk_id == target_category.kiosk_id
         )
     )
     if existing_product: 
-        raise HTTPException(status_code=409, detail="매장에 이미 같은 이름의 상품이 등록되어 있습니다.")
+        raise HTTPException(status_code=409, detail="키오스크에 이미 같은 이름의 상품이 등록되어 있습니다.")
     
     # sequence 자동 생성 (가장 마지막 순서로 배치)
     seq = upload.sequence
     if seq == 0:
-        max_seq = db.scalar(select(func.max(Product.sequence)).where(Product.store_id == target_category.store_id))
+        max_seq = db.scalar(select(func.max(Product.sequence)).where(Product.kiosk_id == target_category.kiosk_id))
         seq = (max_seq or 0) + 1
 
     new_product = Product(
         category_id=target_category.id,
-        store_id=target_category.store_id,
+        kiosk_id=target_category.kiosk_id,
         shelve_id=target_category.shelve_id,
-        kiosk_id=upload.kiosk_id,
         barcode=upload.barcode,
         name=upload.name,
         price=upload.price,
-        buy_from=upload.buy_from,
         image=upload.image,
         stock=upload.stock,
         stock_managed=upload.stock_managed,
@@ -70,27 +72,22 @@ async def upload_product(
     return new_product
 
 
-@router.get("/store/{store_id}", response_model=List[ProductResponse], summary="상품목록조회")
+@router.get("/kiosk/{kiosk_id}", response_model=List[ProductResponse], summary="상품목록조회")
 async def read_product_list(
-    store_id: uuid.UUID,
+    kiosk_id: uuid.UUID,
     name: Optional[str] = None,
     is_active: Optional[bool] = None,
-    x_kiosk_id: Optional[uuid.UUID] = Header(None, alias="X-Kiosk-Id"),
     db: Session = Depends(get_db),
     current_user: UserInfo = Depends(get_current_user)
 ):
-    target_store = db.get(Store, store_id)
-    if not target_store:
-        raise HTTPException(status_code=404, detail="해당 매장을 찾을 수 없습니다")
+    target_kiosk = db.get(Kiosk, kiosk_id)
+    if not target_kiosk:
+        raise HTTPException(status_code=404, detail="해당 키오스크를 찾을 수 없습니다")
     
-    if current_user.role not in [UserRole.MASTER, UserRole.DEV] and current_user.id != target_store.user_id:
-        raise HTTPException(status_code=403, detail="본인 매장 상품만 조회 할 수 있습니다.")
+    if current_user.role not in AutherList and current_user.id != target_kiosk.user_id:
+        raise HTTPException(status_code=403, detail="본인 키오스크 상품만 조회 할 수 있습니다.")
 
-    stmt = select(Product).where(Product.store_id == store_id)
-
-    # X-Kiosk-Id 헤더 필터 추가
-    if x_kiosk_id:
-        stmt = stmt.where(Product.kiosk_id == x_kiosk_id)
+    stmt = select(Product).where(Product.kiosk_id == kiosk_id)
 
     # 검색 필터 지원
     if name:
@@ -105,34 +102,34 @@ async def read_product_list(
     return products
 
 
-@router.patch("/store/{store_id}/product/{product_id}", response_model=ProductResponse, summary="상품정보수정")
+@router.patch("/kiosk/{kiosk_id}/product/{product_id}", response_model=ProductResponse, summary="상품정보수정")
 async def update_product(
-    store_id: uuid.UUID,
+    kiosk_id: uuid.UUID,
     product_id: uuid.UUID,
     update_data: ProductUpdate,
     db: Session = Depends(get_db),
     current_user: UserInfo = Depends(get_current_user)
 ):
-    target_store = db.get(Store, store_id)
-    if not target_store:
-        raise HTTPException(status_code=404, detail="해당 매장을 찾을 수 없습니다.")
+    target_kiosk = db.get(Kiosk, kiosk_id)
+    if not target_kiosk:
+        raise HTTPException(status_code=404, detail="해당 키오스크를 찾을 수 없습니다.")
     
     target_product = db.get(Product, product_id)
-    if not target_product or target_product.store_id != store_id:
+    if not target_product or target_product.kiosk_id != kiosk_id:
         raise HTTPException(status_code=404, detail="해당 상품을 찾을 수 없습니다.")
     
-    if current_user.role not in [UserRole.MASTER, UserRole.DEV] and current_user.id != target_store.user_id:
-        raise HTTPException(status_code=403, detail="본인 매장 상품만 수정할 수 있습니다.")
+    if current_user.role not in AutherList and current_user.id != target_kiosk.user_id:
+        raise HTTPException(status_code=403, detail="본인 키오스크 상품만 수정할 수 있습니다.")
 
     if update_data.name is not None and update_data.name != target_product.name:
         dup_stmt = select(Product).where(
             Product.name == update_data.name, 
-            Product.store_id == store_id,
+            Product.kiosk_id == kiosk_id,
             Product.id != product_id
         )
         existing_product = db.scalar(dup_stmt)
         if existing_product:
-            raise HTTPException(status_code=409, detail="이미 매장에 같은 이름의 상품이 등록되어 있습니다.")
+            raise HTTPException(status_code=409, detail="이미 키오스크에 같은 이름의 상품이 등록되어 있습니다.")
         target_product.name = update_data.name
 
     # 필드 업데이트
@@ -145,8 +142,6 @@ async def update_product(
         target_product.barcode = update_data.barcode
     if update_data.price is not None:
         target_product.price = update_data.price
-    if update_data.buy_from is not None:
-        target_product.buy_from = update_data.buy_from
     if update_data.image is not None:
         target_product.image = update_data.image
     if update_data.stock is not None:
@@ -166,23 +161,23 @@ async def update_product(
     return target_product 
 
 
-@router.delete("/store/{store_id}/product/{product_id}", status_code=status.HTTP_204_NO_CONTENT, summary="상품삭제")
+@router.delete("/kiosk/{kiosk_id}/product/{product_id}", status_code=status.HTTP_204_NO_CONTENT, summary="상품삭제")
 async def delete_product(   
-    store_id: uuid.UUID,
+    kiosk_id: uuid.UUID,
     product_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user: UserInfo = Depends(get_current_user)
 ):
-    target_store = db.get(Store, store_id)
-    if not target_store:
-        raise HTTPException(status_code=404, detail="해당 매장을 찾을 수 없습니다.")
+    target_kiosk = db.get(Kiosk, kiosk_id)
+    if not target_kiosk:
+        raise HTTPException(status_code=404, detail="해당 키오스크를 찾을 수 없습니다.")
     
     target_product = db.get(Product, product_id)
-    if not target_product or target_product.store_id != store_id:
+    if not target_product or target_product.kiosk_id != kiosk_id:
         raise HTTPException(status_code=404, detail="해당 상품을 찾을 수 없습니다.")
     
-    if current_user.role not in [UserRole.MASTER, UserRole.DEV] and current_user.id != target_store.user_id:
-        raise HTTPException(status_code=403, detail="본인 매장 상품만 삭제할 수 있습니다.")
+    if current_user.role not in AutherList and current_user.id != target_kiosk.user_id:
+        raise HTTPException(status_code=403, detail="본인 키오스크 상품만 삭제할 수 있습니다.")
 
     db.delete(target_product)
     db.commit() 
@@ -199,33 +194,31 @@ async def copy_product(
     if not product:
         raise HTTPException(status_code=404, detail="복사할 상품을 찾을 수 없습니다.")
         
-    target_store = db.get(Store, product.store_id)
-    if current_user.role not in [UserRole.MASTER, UserRole.DEV] and current_user.id != target_store.user_id:
-        raise HTTPException(status_code=403, detail="본인 매장의 상품만 복사할 수 있습니다.")
+    target_kiosk = db.get(Kiosk, product.kiosk_id)
+    if current_user.role not in AutherList and current_user.id != target_kiosk.user_id:
+        raise HTTPException(status_code=403, detail="본인 키오스크의 상품만 복사할 수 있습니다.")
 
     # 복사 번호 넘버링 (e.g. 짜장면 -> 짜장면(복사1) -> 짜장면(복사2))
     base_name = re.sub(r"\s*\(복사\d+\)$", "", product.name).strip()
     n = 1
     while True:
         candidate_name = f"{base_name}(복사{n})"
-        dup_stmt = select(Product).where(Product.store_id == product.store_id, Product.name == candidate_name)
+        dup_stmt = select(Product).where(Product.kiosk_id == product.kiosk_id, Product.name == candidate_name)
         if not db.execute(dup_stmt).scalars().first():
             new_name = candidate_name
             break
         n += 1
 
     # sequence 설정 (마지막 순서로 배치)
-    max_seq = db.scalar(select(func.max(Product.sequence)).where(Product.store_id == product.store_id)) or 0
+    max_seq = db.scalar(select(func.max(Product.sequence)).where(Product.kiosk_id == product.kiosk_id)) or 0
 
     copied_product = Product(
         category_id=product.category_id,
-        store_id=product.store_id,
-        shelve_id=product.shelve_id,
         kiosk_id=product.kiosk_id,
+        shelve_id=product.shelve_id,
         barcode=product.barcode,
         name=new_name,
         price=product.price,
-        buy_from=product.buy_from,
         image=product.image,
         stock=product.stock,
         stock_managed=product.stock_managed,
@@ -251,23 +244,23 @@ async def move_product_sequence(
     if not product:
         raise HTTPException(status_code=404, detail="상품을 찾을 수 없습니다.")
 
-    target_store = db.get(Store, product.store_id)
-    if current_user.role not in [UserRole.MASTER, UserRole.DEV] and current_user.id != target_store.user_id:
-        raise HTTPException(status_code=403, detail="본인 매장 상품의 순서만 조정할 수 있습니다.")
+    target_kiosk = db.get(Kiosk, product.kiosk_id)
+    if current_user.role not in AutherList and current_user.id != target_kiosk.user_id:
+        raise HTTPException(status_code=403, detail="본인 키오스크 상품의 순서만 조정할 수 있습니다.")
 
     # Swap할 인접 상품을 찾습니다.
     if direction == "up":
         # 현재 상품보다 작은 sequence 중 가장 큰 값
         swap_stmt = (
             select(Product)
-            .where(Product.store_id == product.store_id, Product.sequence < product.sequence)
+            .where(Product.kiosk_id == product.kiosk_id, Product.sequence < product.sequence)
             .order_by(desc(Product.sequence))
         )
     elif direction == "down":
         # 현재 상품보다 큰 sequence 중 가장 작은 값
         swap_stmt = (
             select(Product)
-            .where(Product.store_id == product.store_id, Product.sequence > product.sequence)
+            .where(Product.kiosk_id == product.kiosk_id, Product.sequence > product.sequence)
             .order_by(Product.sequence.asc())
         )
     else:
@@ -327,9 +320,9 @@ async def bulk_update_status(
     products = db.execute(stmt).scalars().all()
     
     for p in products:
-        target_store = db.get(Store, p.store_id)
-        if current_user.role not in [UserRole.MASTER, UserRole.DEV] and target_store.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="본인 매장의 상품만 일괄 수정할 수 있습니다.")
+        target_kiosk = db.get(Kiosk, p.kiosk_id)
+        if current_user.role not in AutherList and target_kiosk.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="본인 키오스크의 상품만 일괄 수정할 수 있습니다.")
         p.is_active = body.is_active
         
     db.commit()
@@ -349,9 +342,9 @@ async def bulk_delete_products(
     products = db.execute(stmt).scalars().all()
     
     for p in products:
-        target_store = db.get(Store, p.store_id)
-        if current_user.role not in [UserRole.MASTER, UserRole.DEV] and target_store.user_id != current_user.id:
-            raise HTTPException(status_code=403, detail="본인 매장의 상품만 일괄 삭제할 수 있습니다.")
+        target_kiosk = db.get(Kiosk, p.kiosk_id)
+        if current_user.role not in AutherList and target_kiosk.user_id != current_user.id:
+            raise HTTPException(status_code=403, detail="본인 키오스크의 상품만 일괄 삭제할 수 있습니다.")
         db.delete(p)
         
     db.commit()

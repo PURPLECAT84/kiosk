@@ -6,29 +6,23 @@ interface CategoryItem {
   name: string;
 }
 
-interface KioskItem {
-  id: string;
-  name: string;
-}
-
 interface ProductItem {
   id: string;
   category_id: number;
   barcode: string | null;
   name: string;
   price: number;
-  buy_from: string | null;
   image: string;
   stock: number;
   stock_managed: boolean;
-  kiosk_id: string | null;
+  kiosk_id: string;
 }
 
 interface ProductFormModalProps {
   isOpen: boolean;
   onClose: () => void;
-  storeId: string;
-  storeType: string; // 'Store' or 'Restaurant'
+  kioskId: string;
+  kioskType: string; // 'Store' or 'Restaurant'
   token: string;
   productToEdit?: ProductItem | null;
   onSaveSuccess: () => void;
@@ -37,14 +31,13 @@ interface ProductFormModalProps {
 export default function ProductFormModal({
   isOpen,
   onClose,
-  storeId,
-  storeType,
+  kioskId,
+  kioskType,
   token,
   productToEdit,
   onSaveSuccess
 }: ProductFormModalProps) {
   const [categories, setCategories] = useState<CategoryItem[]>([]);
-  const [kdoubleKiosks, setKdoubleKiosks] = useState<KioskItem[]>([]);
   
   const [isLoadingMeta, setIsLoadingMeta] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -55,7 +48,6 @@ export default function ProductFormModal({
   const [name, setName] = useState('');
   const [price, setPrice] = useState(0);
   const [categoryId, setCategoryId] = useState<number | ''>('');
-  const [kioskId, setKioskId] = useState<string>('');
   const [barcode, setBarcode] = useState('');
   const [image, setImage] = useState('');
   const [stockManaged, setStockManaged] = useState(true);
@@ -63,27 +55,17 @@ export default function ProductFormModal({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load Meta Data (categories, kiosks)
+  // Load Meta Data (categories)
   const loadMetaData = async () => {
-    if (!storeId) return;
+    if (!kioskId) return;
     setIsLoadingMeta(true);
     try {
-      // 1. 카테고리 로드
-      const catRes = await fetch(`/category/store/${storeId}`, {
+      const catRes = await fetch(`/category/kiosk/${kioskId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (catRes.ok) {
         const catData = await catRes.json();
         setCategories(catData);
-      }
-
-      // 2. 키오스크 로드
-      const kioskRes = await fetch(`/kiosks/?store_id=${storeId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (kioskRes.ok) {
-        const kioskData = await kioskRes.json();
-        setKdoubleKiosks(kioskData);
       }
     } catch (err: any) {
       console.error(err);
@@ -93,7 +75,7 @@ export default function ProductFormModal({
   };
 
   useEffect(() => {
-    if (isOpen && storeId) {
+    if (isOpen && kioskId) {
       loadMetaData();
       setError('');
       
@@ -101,7 +83,6 @@ export default function ProductFormModal({
         setName(productToEdit.name);
         setPrice(productToEdit.price);
         setCategoryId(productToEdit.category_id);
-        setKioskId(productToEdit.kiosk_id || '');
         setBarcode(productToEdit.barcode || '');
         setImage(productToEdit.image || '');
         setStockManaged(productToEdit.stock_managed);
@@ -110,14 +91,13 @@ export default function ProductFormModal({
         setName('');
         setPrice(0);
         setCategoryId('');
-        setKioskId('');
         setBarcode('');
         setImage('');
         setStockManaged(true);
         setStock(0);
       }
     }
-  }, [isOpen, storeId, productToEdit]);
+  }, [isOpen, kioskId, productToEdit]);
 
   // Image File Upload
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -156,7 +136,6 @@ export default function ProductFormModal({
 
   // Barcode Simulator
   const simulateBarcodeScan = () => {
-    // Generate standard EAN-13 random mock barcode
     const randomDigits = Array.from({ length: 12 }, () => Math.floor(Math.random() * 10)).join('');
     setBarcode('880' + randomDigits.substring(3));
   };
@@ -176,19 +155,18 @@ export default function ProductFormModal({
       category_id: Number(categoryId),
       name,
       price: Number(price),
-      buy_from: null,
-      image: image || '/static/images/placeholder.png', // 기본 이미지 설정
+      image: image || '/static/images/placeholder.png',
       stock: stockManaged ? Number(stock) : 0,
       stock_managed: stockManaged,
-      kiosk_id: kioskId || null,
-      barcode: storeType === 'Restaurant' ? null : (barcode || null)
+      kiosk_id: kioskId,
+      barcode: kioskType === 'Restaurant' ? null : (barcode || null)
     };
 
     try {
       let res;
       if (productToEdit) {
         // Edit Mode
-        res = await fetch(`/products/store/${storeId}/product/${productToEdit.id}`, {
+        res = await fetch(`/products/kiosk/${kioskId}/product/${productToEdit.id}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -273,41 +251,24 @@ export default function ProductFormModal({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            {/* 카테고리 선택 */}
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1.5">카테고리</label>
-              <select
-                value={categoryId}
-                onChange={(e) => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}
-                className="w-full px-4 py-3 border border-gray-300 bg-white rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-base font-semibold"
-                required
-              >
-                <option value="">카테고리 선택</option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* 기기 선택 */}
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1.5">노출 키오스크 기기</label>
-              <select
-                value={kioskId}
-                onChange={(e) => setKioskId(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 bg-white rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-base font-semibold"
-              >
-                <option value="">전체 기기 노출</option>
-                {kdoubleKiosks.map((k) => (
-                  <option key={k.id} value={k.id}>{k.name}</option>
-                ))}
-              </select>
-            </div>
+          {/* 카테고리 선택 */}
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1.5">카테고리</label>
+            <select
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value === '' ? '' : Number(e.target.value))}
+              className="w-full px-4 py-3 border border-gray-300 bg-white rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-base font-semibold"
+              required
+            >
+              <option value="">카테고리 선택</option>
+              {categories.map((cat) => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              ))}
+            </select>
           </div>
 
           {/* 바코드 입력란 (외식형이 아닐 때만 노출) */}
-          {storeType !== 'Restaurant' && (
+          {kioskType !== 'Restaurant' && (
             <div>
               <label className="block text-sm font-bold text-gray-700 mb-1.5">바코드 번호</label>
               <div className="flex space-x-2">

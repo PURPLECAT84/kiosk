@@ -7,7 +7,7 @@ class KioskCreate(BaseModel):
     model_name: str | None = None
     type: str = "Store" # Store / Restaurant
     status: str = "WAITING" # OPERATING / WAITING
-    store_id: uuid.UUID
+    user_id: uuid.UUID
 
 class KioskUpdate(BaseModel):
     name: str | None = None
@@ -19,7 +19,7 @@ class KioskUpdate(BaseModel):
 class KioskResponse(BaseModel):
     id: uuid.UUID
     code: str
-    store_id: uuid.UUID
+    user_id: uuid.UUID
     store_name: str | None = None # Joins store name for frontend display
     name: str
     model_name: str | None

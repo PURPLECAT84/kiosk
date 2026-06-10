@@ -13,7 +13,6 @@ interface OrderItemDetail {
 interface OrderItem {
   id: number;
   order_no: string | null;
-  store_id: string;
   total_amount: number;
   payment_method: string;
   payment_provider: string;
@@ -27,19 +26,13 @@ interface OrderItem {
   refunded_at?: string | null;
 }
 
-interface StoreItem {
-  id: string;
-  name: string;
-}
-
 export default function OrdersPage() {
   const { token } = useAuth();
   const { currentKioskId } = useKiosk();
-  const [stores, setStores] = useState<StoreItem[]>([]);
-  const [selectedStoreId, setSelectedStoreId] = useState<string>('');
+  const [currentKiosk, setCurrentKiosk] = useState<any>(null);
   const [orders, setOrders] = useState<OrderItem[]>([]);
   
-  const [isLoadingStores, setIsLoadingStores] = useState(true);
+  const [isLoadingKiosk, setIsLoadingKiosk] = useState(true);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
   const [error, setError] = useState('');
 
@@ -55,56 +48,59 @@ export default function OrdersPage() {
   const [refundReason, setRefundReason] = useState<string>('고객 변심');
   const [refundMethod, setRefundMethod] = useState<string>('카드취소');
 
-  // 1. 점주 소유 매장 목록 가져오기
-  const fetchStores = async () => {
-    setIsLoadingStores(true);
+  // 1. 현재 키오스크 상세 조회
+  const fetchKioskDetail = async () => {
+    if (!currentKioskId) {
+      setIsLoadingKiosk(false);
+      return;
+    }
+    setIsLoadingKiosk(true);
     try {
-      const res = await fetch('/store/', {
+      const res = await fetch(`/kiosks/${currentKioskId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (!res.ok) throw new Error('매장 정보를 가져오지 못했습니다.');
-      const data = await res.json();
-      setStores(data);
-      if (data.length > 0) {
-        setSelectedStoreId(data[0].id);
+      if (res.status === 403) {
+        throw new Error('키오스크 접근 권한이 없습니다 (403).');
       }
+      if (!res.ok) throw new Error('키오스크 정보를 가져오지 못했습니다.');
+      const data = await res.json();
+      setCurrentKiosk(data);
     } catch (err: any) {
       setError(err.message);
     } finally {
-      setIsLoadingStores(false);
+      setIsLoadingKiosk(false);
     }
   };
 
-  // 2. 선택된 매장의 주문 내역 가져오기
-  const fetchOrders = async (storeId: string) => {
-    if (!storeId) return;
+  // 2. 선택된 키오스크의 주문 내역 가져오기
+  const fetchOrders = async () => {
+    if (!currentKioskId) return;
     setIsLoadingOrders(true);
     try {
-      const res = await fetch(`/order/?store_id=${storeId}`, {
+      const res = await fetch(`/order/?kiosk_id=${currentKioskId}`, {
         headers: { 
-          'Authorization': `Bearer ${token}`,
-          ...(currentKioskId ? { 'X-Kiosk-Id': currentKioskId } : {})
+          'Authorization': `Bearer ${token}`
         }
       });
       if (!res.ok) throw new Error('주문 목록을 가져오지 못했습니다.');
       const data = await res.json();
       setOrders(data);
     } catch (err: any) {
-      alert(err.message);
+      console.error(err);
     } finally {
       setIsLoadingOrders(false);
     }
   };
 
   useEffect(() => {
-    fetchStores();
-  }, [token]);
+    fetchKioskDetail();
+  }, [token, currentKioskId]);
 
   useEffect(() => {
-    if (selectedStoreId) {
-      fetchOrders(selectedStoreId);
+    if (currentKioskId) {
+      fetchOrders();
     }
-  }, [selectedStoreId, currentKioskId]);
+  }, [currentKioskId]);
 
   // 3. 영수증 상세 내역 가져오기 (마스킹 해제)
   const handleOpenDetail = async (orderId: number) => {
@@ -289,7 +285,7 @@ export default function OrdersPage() {
     link.click();
   };
 
-  if (isLoadingStores) {
+  if (isLoadingKiosk) {
     return (
       <div className="flex-grow p-8 flex justify-center items-center h-full">
         <Loader2 className="animate-spin text-[#7C3AED]" size={48} />
@@ -308,29 +304,25 @@ export default function OrdersPage() {
     );
   }
 
+  if (!currentKioskId) {
+    return (
+      <div className="flex-grow p-8 flex flex-col justify-center items-center h-[60vh] text-center space-y-4">
+        <AlertTriangle size={48} className="text-yellow-500 animate-bounce" />
+        <h3 className="text-xl font-bold text-gray-800">관리 대상 키오스크 미선택</h3>
+        <p className="text-gray-500 max-w-md">주문 매출 관리를 시작하려면 좌측 하단의 키오스크 선택기 또는 기기 관리 메뉴에서 관리 대상을 먼저 선택해 주세요.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-1">매출 및 주문 관리</h1>
-          <p className="text-gray-500 text-base">각 가맹 매장의 고객 결제 건들을 관리하고 환불을 지원합니다.</p>
+          <p className="text-gray-500 text-base">
+            현재 관리 기기: <span className="font-bold text-[#7C3AED]">{currentKiosk?.name || '키오스크'}</span> ({currentKiosk?.store_name || '매장'})
+          </p>
         </div>
-        
-        {/* 매장 선택 dropdown */}
-        {stores.length > 0 && (
-          <div className="flex items-center space-x-3 bg-white border border-gray-200 px-4 py-2 rounded-xl shadow-sm">
-            <span className="text-sm font-bold text-gray-500">매장 선택:</span>
-            <select
-              value={selectedStoreId}
-              onChange={(e) => setSelectedStoreId(e.target.value)}
-              className="outline-none bg-white font-bold text-gray-800 text-base cursor-pointer"
-            >
-              {stores.map(store => (
-                <option key={store.id} value={store.id}>{store.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
       </div>
 
       {/* 주문 내역 목록 테이블 */}
@@ -481,7 +473,7 @@ export default function OrdersPage() {
                       <span className="text-xs font-bold text-red-600 block mb-1">⚠️ 환불 완료 상세 정보</span>
                       <div className="text-sm space-y-2 text-red-900">
                         <div className="flex justify-between">
-                          <span className="font-medium text-red-700">환불 금액</span>
+                           <span className="font-medium text-red-700">환불 금액</span>
                           <span className="font-extrabold">₩{detailedOrder.refund_amount?.toLocaleString() || '0'}</span>
                         </div>
                         <div className="flex justify-between">

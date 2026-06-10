@@ -1,17 +1,17 @@
 from database import DB_session
 import sys
-from models.user import User
-from models.store import Store
+from models.user import UserInfo, UserRole
+from models.kiosk import Kiosk
 from sqlalchemy import select
 
 db = DB_session()
 
-stmt = select(User).where(User.authority == 'manager')
+stmt = select(UserInfo).where(UserInfo.role == UserRole.MANAGER)
 managers = db.scalars(stmt).all()
 
 for m in managers:
-    stores = db.scalars(select(Store).where(Store.user_id == m.id)).all()
-    if stores:
-        print(f"FOUND MANAGER WITH STORE: {m.email} / stores: {len(stores)}")
+    kiosks = db.scalars(select(Kiosk).where(Kiosk.user_id == m.id)).all()
+    if kiosks:
+        print(f"FOUND MANAGER WITH KIOSK: {m.email} / kiosks: {len(kiosks)}")
         sys.exit(0)
-print("NO MANAGER WITH STORE FOUND")
+print("NO MANAGER WITH KIOSK FOUND")

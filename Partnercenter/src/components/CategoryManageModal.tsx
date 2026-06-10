@@ -5,7 +5,7 @@ interface CategoryItem {
   id: number;
   name: string;
   shelve_id: string;
-  store_id: string;
+  kiosk_id: string;
 }
 
 interface ShelveItem {
@@ -16,7 +16,7 @@ interface ShelveItem {
 interface CategoryManageModalProps {
   isOpen: boolean;
   onClose: () => void;
-  storeId: string;
+  kioskId: string;
   token: string;
   onCategoriesUpdated?: () => void;
 }
@@ -24,7 +24,7 @@ interface CategoryManageModalProps {
 export default function CategoryManageModal({
   isOpen,
   onClose,
-  storeId,
+  kioskId,
   token,
   onCategoriesUpdated
 }: CategoryManageModalProps) {
@@ -36,10 +36,10 @@ export default function CategoryManageModal({
 
   // 1. 카테고리 목록 가져오기
   const fetchCategories = async () => {
-    if (!storeId) return;
+    if (!kioskId) return;
     setIsLoading(true);
     try {
-      const res = await fetch(`/category/store/${storeId}`, {
+      const res = await fetch(`/category/kiosk/${kioskId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) throw new Error('카테고리 조회를 실패했습니다.');
@@ -53,16 +53,16 @@ export default function CategoryManageModal({
   };
 
   useEffect(() => {
-    if (isOpen && storeId) {
+    if (isOpen && kioskId) {
       fetchCategories();
       setError('');
     }
-  }, [isOpen, storeId]);
+  }, [isOpen, kioskId]);
 
   // 2. 매대의 ID를 찾거나 없으면 생성하기
   const getOrCreateShelveId = async (): Promise<string> => {
     // 매대 목록 조회
-    const res = await fetch(`/shelve/store/${storeId}/shelve`, {
+    const res = await fetch(`/shelves/kiosk/${kioskId}/shelve`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     if (!res.ok) throw new Error('매대 정보 조회에 실패했습니다.');
@@ -73,7 +73,7 @@ export default function CategoryManageModal({
     }
 
     // 없으면 기본 매대 생성
-    const createRes = await fetch(`/shelve/store/${storeId}/shelve`, {
+    const createRes = await fetch(`/shelves/kiosk/${kioskId}/shelve`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

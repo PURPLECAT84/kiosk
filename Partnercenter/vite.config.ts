@@ -16,10 +16,6 @@ export default defineConfig({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true
       },
-      '/store': {
-        target: 'http://127.0.0.1:8000',
-        changeOrigin: true
-      },
       '/kiosks': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true
@@ -32,7 +28,7 @@ export default defineConfig({
         target: 'http://127.0.0.1:8000',
         changeOrigin: true
       },
-      '/categories': {
+      '/category': {
         target: 'http://127.0.0.1:8000',
         changeOrigin: true
       },

@@ -8,7 +8,6 @@ class ProductCreate(BaseModel):
     barcode: Optional[str] = None
     name: str
     price: int
-    buy_from: Optional[str] = None
     image: str
     stock: int = 0
     stock_managed: bool = True
@@ -20,7 +19,6 @@ class ProductUpdate(BaseModel):
     barcode: Optional[str] = None
     name: Optional[str] = None
     price: Optional[int] = None
-    buy_from: Optional[str] = None
     image: Optional[str] = None
     stock: Optional[int] = None
     stock_managed: Optional[bool] = None
@@ -30,20 +28,18 @@ class ProductUpdate(BaseModel):
 
 class ProductResponse(BaseModel):
     id: uuid.UUID
-    store_id: uuid.UUID
+    kiosk_id: uuid.UUID
     shelve_id: uuid.UUID
     category_id: int
     barcode: Optional[str] = None
     name: str
     price: int
-    buy_from: Optional[str] = None
     created_date: datetime
     image: str
     stock: int
     stock_managed: bool
     is_active: bool
     sequence: int
-    kiosk_id: Optional[uuid.UUID] = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -13,11 +13,10 @@ class Category(Base):
     __tablename__ = "product_category"
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     shelve_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("shelve_info.id"), nullable=False)
-    store_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), nullable=False)
-    kiosk_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("kiosks.id", ondelete="CASCADE"), nullable=True) # 기기 귀속을 위한 외래키
+    kiosk_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("kiosks.id", ondelete="CASCADE"), nullable=False) # 기기 귀속을 위한 외래키
     name: Mapped[str] = mapped_column(String, nullable=False)
     sequence: Mapped[int] = mapped_column(Integer, default=0, nullable=False) # 노출 순서 정렬용 필드
 
     shelve = relationship("Shelve", back_populates="categories")
     products = relationship("Product", back_populates="category", cascade="all, delete-orphan")
-    kiosk: Mapped[Optional["Kiosk"]] = relationship("Kiosk", back_populates="categories")
+    kiosk: Mapped["Kiosk"] = relationship("Kiosk", back_populates="categories")

@@ -2,8 +2,7 @@
 import uuid
 from sqlalchemy.orm import Session
 from sqlalchemy import select
-from models.user import UserInfo, UserRole
-from models.store import Store
+from models.user import UserInfo, UserRole, UserStatus, BusinessInfo
 from models.kiosk import Kiosk
 from models.shelve import Shelve
 from models.category import Category
@@ -28,12 +27,28 @@ def seed_initial_data(db: Session):
             email=manager_email,
             password=get_password_hash("88888888"),
             name="김점주 사장님",
+            phone="010-8888-8888",
             role=UserRole.MANAGER,
-            is_active=True
+            status=UserStatus.ACTIVE,
+            is_business_verified=True
         )
         db.add(manager_user)
         db.commit()
         db.refresh(manager_user)
+        
+        # 가맹점 사업자 등록 정보(BusinessInfo)도 시더에서 함께 적재하여 데이터 정합성 보장
+        business = BusinessInfo(
+            user_id=manager_user.id,
+            business_number="888-88-88888",
+            business_name="모키반점 푸드",
+            representative_name="김점주",
+            representative_phone="010-8888-8888",
+            store_name="모키반점",
+            document_url="/static/images/default_doc.png",
+            is_verified=True
+        )
+        db.add(business)
+        db.commit()
 
     # 2. 테스트용 개발자(DEV) 계정 보장 (dev@moki.com / 88888888)
     dev_email = "dev@moki.com"
@@ -45,34 +60,15 @@ def seed_initial_data(db: Session):
             email=dev_email,
             password=get_password_hash("88888888"),
             name="모키 개발자",
-            role=UserRole.DEV,
-            is_active=True
+            phone="010-9999-9999",
+            role=UserRole.DEV
         )
         db.add(dev_user)
         db.commit()
         db.refresh(dev_user)
 
-    # 3. 키오스크 클라이언트가 기본으로 조회하는 UUID 고정 매장 정보 보장 (88888888-8888-8888-8888-888888888888)
+    # 3. 고정 UUID 키오스크 기기 보장
     target_uuid = uuid.UUID("88888888-8888-8888-8888-888888888888")
-    stmt = select(Store).where(Store.id == target_uuid)
-    store = db.execute(stmt).scalars().first()
-    
-    if not store:
-        store = Store(
-            id=target_uuid,
-            code="ST8888",
-            name="모키 반점",
-            address="서울시 보라구 행복동 88-8",
-            type="Restaurant", # 외식형 키오스크 매장
-            owner_name="김점주",
-            user_id=manager_user.id,
-            status="ACTIVE"
-        )
-        db.add(store)
-        db.commit()
-        db.refresh(store)
-
-    # 4. 고정 UUID 키오스크 기기 보장
     stmt = select(Kiosk).where(Kiosk.id == target_uuid)
     kiosk = db.execute(stmt).scalars().first()
     
@@ -80,7 +76,7 @@ def seed_initial_data(db: Session):
         kiosk = Kiosk(
             id=target_uuid,
             code="KS888888",
-            store_id=store.id,
+            user_id=manager_user.id,
             name="모키반점 입구 키오스크",
             model_name="MOKI-A1",
             type="Restaurant",
@@ -91,13 +87,13 @@ def seed_initial_data(db: Session):
         db.commit()
         db.refresh(kiosk)
 
-    # 5. 매대(Shelve) 보장
-    stmt = select(Shelve).where(Shelve.store_id == store.id)
+    # 4. 매대(Shelve) 보장
+    stmt = select(Shelve).where(Shelve.kiosk_id == kiosk.id)
     shelve = db.execute(stmt).scalars().first()
     if not shelve:
         shelve = Shelve(
             name="메인 카운터 매대",
-            store_id=store.id,
+            kiosk_id=kiosk.id,
             terminal_id="TERM-8888",
             business_number="888-88-88888",
             vender_code="VEND-8888"
@@ -106,7 +102,7 @@ def seed_initial_data(db: Session):
         db.commit()
         db.refresh(shelve)
 
-    # 6. 카테고리 보장 (추천 요리, 식사류, 음료/주류)
+    # 5. 카테고리 보장 (추천 요리, 식사류, 음료/주류)
     categories_data = [
         {"name": "🔥 추천 요리", "sequence": 1},
         {"name": "🍚 식사류", "sequence": 2},
@@ -115,21 +111,21 @@ def seed_initial_data(db: Session):
     
     categories = {}
     for cat_info in categories_data:
-        stmt = select(Category).where(Category.name == cat_info["name"], Category.store_id == store.id)
+        stmt = select(Category).where(Category.name == cat_info["name"], Category.kiosk_id == kiosk.id)
         cat = db.execute(stmt).scalars().first()
         if not cat:
             cat = Category(
                 name=cat_info["name"],
                 sequence=cat_info["sequence"],
                 shelve_id=shelve.id,
-                store_id=store.id
+                kiosk_id=kiosk.id
             )
             db.add(cat)
             db.commit()
             db.refresh(cat)
         categories[cat_info["name"]] = cat
 
-    # 7. 상품 보장 (오프라인 더미 데이터와 동일한 구성으로 연동)
+    # 6. 상품 보장 (오프라인 더미 데이터와 동일한 구성으로 연동)
     products_data = [
         # 추천 요리
         {"category": "🔥 추천 요리", "name": "명품 짜장면", "price": 7000, "stock": 50, "status": "ACTIVE", "sequence": 1},
@@ -145,13 +141,12 @@ def seed_initial_data(db: Session):
     ]
 
     for prod_info in products_data:
-        stmt = select(Product).where(Product.name == prod_info["name"], Product.store_id == store.id)
+        stmt = select(Product).where(Product.name == prod_info["name"], Product.kiosk_id == kiosk.id)
         prod = db.execute(stmt).scalars().first()
         if not prod:
             cat = categories[prod_info["category"]]
             prod = Product(
                 category_id=cat.id,
-                store_id=store.id,
                 shelve_id=shelve.id,
                 kiosk_id=kiosk.id,
                 name=prod_info["name"],

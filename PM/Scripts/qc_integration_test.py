@@ -11,7 +11,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'Backend'))
 
 from database import DB_session
 from models.user import UserInfo, UserRole, UserStatus, BusinessInfo
-from models.store import Store
 from models.kiosk import Kiosk
 from models.kiosk_admin import KioskAdmin
 from models.shelve import Shelve
@@ -40,33 +39,28 @@ def clean_database(owner_email, dev_email, helper_email=None):
             # 1. KioskAdmin 삭제
             db.query(KioskAdmin).filter(KioskAdmin.user_id.in_(user_ids)).delete(synchronize_session=False)
             
-            # 2. Store 및 소유 상품, 카테고리, 매대, 주문서 삭제
-            stores = db.query(Store).filter(Store.user_id.in_(user_ids)).all()
-            store_ids = [s.id for s in stores]
-            if store_ids:
+            # 2. 소유 키오스크 및 소유 상품, 카테고리, 매대, 주문서 삭제
+            kiosks = db.query(Kiosk).filter(Kiosk.user_id.in_(user_ids)).all()
+            kiosk_ids = [k.id for k in kiosks]
+            if kiosk_ids:
                 # 주문 아이템 및 주문서 삭제
-                orders = db.query(Order).filter(Order.store_id.in_(store_ids)).all()
+                orders = db.query(Order).filter(Order.kiosk_id.in_(kiosk_ids)).all()
                 order_ids = [o.id for o in orders]
                 if order_ids:
                     db.query(OrderItem).filter(OrderItem.order_id.in_(order_ids)).delete(synchronize_session=False)
                     db.query(Order).filter(Order.id.in_(order_ids)).delete(synchronize_session=False)
                 
                 # 상품 삭제
-                db.query(Product).filter(Product.kiosk_id.in_(
-                    db.query(Kiosk.id).filter(Kiosk.store_id.in_(store_ids))
-                )).delete(synchronize_session=False)
+                db.query(Product).filter(Product.kiosk_id.in_(kiosk_ids)).delete(synchronize_session=False)
                 
                 # 카테고리 삭제
-                db.query(Category).filter(Category.store_id.in_(store_ids)).delete(synchronize_session=False)
+                db.query(Category).filter(Category.kiosk_id.in_(kiosk_ids)).delete(synchronize_session=False)
                 
                 # 매대 삭제
-                db.query(Shelve).filter(Shelve.store_id.in_(store_ids)).delete(synchronize_session=False)
+                db.query(Shelve).filter(Shelve.kiosk_id.in_(kiosk_ids)).delete(synchronize_session=False)
                 
                 # 키오스크 삭제
-                db.query(Kiosk).filter(Kiosk.store_id.in_(store_ids)).delete(synchronize_session=False)
-                
-                # 매장 삭제
-                db.query(Store).filter(Store.id.in_(store_ids)).delete(synchronize_session=False)
+                db.query(Kiosk).filter(Kiosk.id.in_(kiosk_ids)).delete(synchronize_session=False)
                 
             # 3. 비즈니스 정보 삭제
             db.query(BusinessInfo).filter(BusinessInfo.user_id.in_(user_ids)).delete(synchronize_session=False)
@@ -191,8 +185,8 @@ def run_tests():
         assert res.status_code == 200, f"액티브 매장 목록 조회 실패: {res.text}"
         stores_data = res.json()
         assert len(stores_data) > 0, "인증 완료 매장이 반환되지 않았습니다."
-        store_id = stores_data[0]["id"]
-        print(f"✅ 인증 완료 매장 조회 성공 (매장명: {stores_data[0]['name']}, ID: {store_id})")
+        verified_user_id = stores_data[0]["id"]
+        print(f"✅ 인증 완료 매장 조회 성공 (매장명: {stores_data[0]['name']}, ID: {verified_user_id})")
 
         # 키오스크 등록
         res = client.post("/kiosks/", headers=owner_headers, json={
@@ -200,7 +194,7 @@ def run_tests():
             "model_name": "K-MOKI-QC",
             "type": "Restaurant",
             "status": "WAITING",
-            "store_id": store_id
+            "user_id": verified_user_id
         })
         assert res.status_code == 201, f"키오스크 등록 실패: {res.text}"
         kiosk_id = res.json()["id"]
@@ -219,7 +213,7 @@ def run_tests():
         print("\n--- 5. 매장 카탈로그 (매대, 카테고리, 상품) 빌드 검증 ---")
         
         # 6-1. 매대 생성
-        res = client.post(f"/shelves/store/{store_id}/shelve", headers=owner_headers, json={
+        res = client.post(f"/shelves/kiosk/{kiosk_id}/shelve", headers=owner_headers, json={
             "name": "QC기본진열대",
             "terminal_id": "T001",
             "business_number": "999-99-99999",
@@ -243,7 +237,6 @@ def run_tests():
             "category_id": category_id,
             "name": "QC수제짜장",
             "price": 6500,
-            "buy_from": "모키푸드",
             "image": "/static/images/jjajang.png",
             "stock": 5,
             "stock_managed": True,
@@ -268,7 +261,6 @@ def run_tests():
 
         # 가상 주문 결제 요청
         res = client.post("/kiosk_client/pay/mock", json={
-            "store_id": store_id,
             "kiosk_id": kiosk_id,
             "total_amount": 6500,
             "payment_method": "카드",
@@ -305,13 +297,13 @@ def run_tests():
 
         # 8-2. 주문 내역 조회 검증
         # 활성 키오스크 헤더 주입 시 -> 1건의 주문이 리턴되어야 함
-        res = client.get(f"/order/?store_id={store_id}", headers={**owner_headers, "X-Kiosk-Id": kiosk_id})
+        res = client.get(f"/order/?kiosk_id={kiosk_id}", headers={**owner_headers, "X-Kiosk-Id": kiosk_id})
         assert res.status_code == 200, f"주문 목록 조회 실패: {res.text}"
         assert len(res.json()) == 1, f"기기에 귀속된 주문이 조회되지 않았습니다. 건수: {len(res.json())}"
         print("✅ X-Kiosk-Id 주입 주문 내역: 1건 조회 성공")
 
         # 임의의 기기 ID 주입 시 -> 0건 리턴되어야 함
-        res = client.get(f"/order/?store_id={store_id}", headers={**owner_headers, "X-Kiosk-Id": fake_kiosk_id})
+        res = client.get(f"/order/?kiosk_id={kiosk_id}", headers={**owner_headers, "X-Kiosk-Id": fake_kiosk_id})
         assert len(res.json()) == 0, f"주문 목록이 기기 ID 기준으로 필터링되지 않았습니다: {len(res.json())}건"
         print("✅ 존재하지 않는 X-Kiosk-Id 주입 주문 내역: 0건 (주문 격리 필터 작동 정상)")
 

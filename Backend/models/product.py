@@ -15,13 +15,11 @@ class Product(Base):
     __tablename__ = "product_list"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4, index=True)
     category_id: Mapped[int] = mapped_column(ForeignKey("product_category.id"), nullable=False) 
-    store_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("stores.id", ondelete="CASCADE"), nullable=False)
-    kiosk_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("kiosks.id", ondelete="CASCADE"), nullable=True) # 기기 귀속을 위한 외래키
+    kiosk_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("kiosks.id", ondelete="CASCADE"), nullable=False) # 기기 귀속을 위한 외래키
     shelve_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("shelve_info.id"), nullable=False)
     barcode: Mapped[str] = mapped_column(String, nullable=True)
     name: Mapped[str] = mapped_column(String, nullable=False)
     price: Mapped[int] = mapped_column(Integer, nullable=False)
-    buy_from: Mapped[str] = mapped_column(String, nullable=True)
     created_date: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.now)
     image: Mapped[str] = mapped_column(String, nullable=False)
     stock: Mapped[int] = mapped_column(Integer, default=0) # 남은 재고 수량
@@ -33,4 +31,4 @@ class Product(Base):
     shelve = relationship("Shelve", back_populates="products")
     category = relationship("Category", back_populates="products")
     order_items = relationship("OrderItem", back_populates="product", cascade="all, delete-orphan")
-    kiosk: Mapped[Optional["Kiosk"]] = relationship("Kiosk", back_populates="products")
+    kiosk: Mapped["Kiosk"] = relationship("Kiosk", back_populates="products")

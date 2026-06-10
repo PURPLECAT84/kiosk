@@ -18,7 +18,7 @@ class ShelveUpdate(BaseModel):
 class ShelveResponse(BaseModel):
 
     id: uuid.UUID
-    store_id : uuid.UUID
+    kiosk_id : uuid.UUID
     name : str
     terminal_id : str
     business_number : str

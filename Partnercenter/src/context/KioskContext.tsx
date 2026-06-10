@@ -4,7 +4,6 @@ import { useAuth } from './AuthContext';
 export interface Kiosk {
   id: string;
   code: string;
-  store_id: string;
   store_name: string | null;
   name: string;
   model_name: string | null;
@@ -19,7 +18,6 @@ interface KioskContextType {
   currentKioskId: string | null;
   currentKioskName: string | null;
   currentStoreName: string | null;
-  currentStoreId: string | null;
   myKiosks: Kiosk[];
   isLoadingKiosks: boolean;
   setCurrentKioskId: (id: string | null) => void;
@@ -36,7 +34,6 @@ export const KioskProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
   const [currentKioskName, setCurrentKioskName] = useState<string | null>(null);
   const [currentStoreName, setCurrentStoreName] = useState<string | null>(null);
-  const [currentStoreId, setCurrentStoreId] = useState<string | null>(null);
   const [isLoadingKiosks, setIsLoadingKiosks] = useState(false);
 
   const refreshMyKiosks = async () => {
@@ -102,17 +99,14 @@ export const KioskProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (activeKiosk) {
         setCurrentKioskName(activeKiosk.name);
         setCurrentStoreName(activeKiosk.store_name);
-        setCurrentStoreId(activeKiosk.store_id);
       } else {
         // 혹시라도 목록에서 찾을 수 없을 때 (예: 기기 삭제 등)
         setCurrentKioskName(null);
         setCurrentStoreName(null);
-        setCurrentStoreId(null);
       }
     } else {
       setCurrentKioskName(null);
       setCurrentStoreName(null);
-      setCurrentStoreId(null);
     }
   }, [currentKioskId, myKiosks]);
 
@@ -122,7 +116,6 @@ export const KioskProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         currentKioskId,
         currentKioskName,
         currentStoreName,
-        currentStoreId,
         myKiosks,
         isLoadingKiosks,
         setCurrentKioskId,

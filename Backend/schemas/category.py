@@ -15,6 +15,6 @@ class CategoryResponse(BaseModel):
     id : int
     name : str
     shelve_id : uuid.UUID
-    store_id : uuid.UUID
+    kiosk_id : uuid.UUID
 
     model_config = ConfigDict(from_attributes = True)

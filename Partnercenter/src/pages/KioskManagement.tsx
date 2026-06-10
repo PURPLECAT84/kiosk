@@ -2,12 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useKiosk } from '../context/KioskContext';
-import { Monitor, Plus, Calendar, Loader2 } from 'lucide-react';
+import { Monitor, Plus, Calendar, Loader2, CheckCircle2, ArrowRightCircle } from 'lucide-react';
 
 interface KioskItem {
   id: string;
   code: string;
-  store_id: string;
+  user_id: string;
   store_name: string | null;
   name: string;
   model_name: string | null;
@@ -121,7 +121,7 @@ export default function KioskManagement() {
           model_name: newKioskModel,
           type: newKioskType,
           status: newKioskStatus,
-          store_id: newKioskStoreId
+          user_id: newKioskStoreId
         })
       });
       if (!res.ok) {
@@ -142,12 +142,39 @@ export default function KioskManagement() {
     }
   };
 
+  const handleDeleteKioskDirect = async (e: React.MouseEvent, kioskId: string) => {
+    e.stopPropagation();
+    if (!window.confirm('정말로 이 키오스크 기기를 삭제하시겠습니까? 기기에 등록된 상품 매핑 정보가 모두 소멸됩니다.')) return;
+    try {
+      const res = await fetch(`/kiosks/${kioskId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error('기기 삭제에 실패했습니다.');
+      
+      alert('키오스크가 성공적으로 삭제되었습니다.');
+      if (currentKioskId === kioskId) {
+        setCurrentKioskId('');
+        localStorage.removeItem('currentKioskId');
+        localStorage.removeItem('currentKioskName');
+      }
+      fetchData(); // Refresh list
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleSwitchKiosk = (kioskId: string) => {
+    setCurrentKioskId(kioskId);
+    window.location.href = '/';
+  };
+
   const ownerStoreIds = ownerFilter
     ? stores.filter(s => s.owner_name === ownerFilter).map(s => s.id)
     : [];
 
   const filteredKiosks = ownerFilter
-    ? kiosks.filter(k => ownerStoreIds.includes(k.store_id))
+    ? kiosks.filter(k => ownerStoreIds.includes(k.user_id))
     : kiosks;
 
   if (isLoading) {
@@ -176,7 +203,7 @@ export default function KioskManagement() {
           <h1 className="text-3xl font-bold text-gray-900 mb-1">키오스크 기기 관리</h1>
           <p className="text-gray-500 text-base">각 가맹점 매장의 키오스크 기기를 추가하고 상태를 조회합니다.</p>
         </div>
-        {stores.length > 0 && (
+        {(stores.length > 0 || user?.role === 'DEV' || user?.role === 'HEAD') && (
           <button
             onClick={() => setIsModalOpen(true)}
             className="flex items-center space-x-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold px-5 py-3 rounded-xl transition-all shadow-sm cursor-pointer"
@@ -204,6 +231,7 @@ export default function KioskManagement() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100 text-gray-600 font-semibold text-sm">
+                <th className="px-6 py-4 text-center">선택</th>
                 <th className="px-6 py-4">기기 ID (고유코드)</th>
                 <th className="px-6 py-4">매장명</th>
                 <th className="px-6 py-4">키오스크명</th>
@@ -212,12 +240,13 @@ export default function KioskManagement() {
                 <th className="px-6 py-4">가동 상태</th>
                 <th className="px-6 py-4">결제 상태</th>
                 <th className="px-6 py-4">다음 결제 예정일</th>
+                {(user?.role === 'DEV' || user?.role === 'HEAD') && <th className="px-6 py-4 text-center">작업</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-gray-700">
               {filteredKiosks.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-gray-400 font-medium">
+                  <td colSpan={(user?.role === 'DEV' || user?.role === 'HEAD') ? 10 : 9} className="text-center py-12 text-gray-400 font-medium">
                     {ownerFilter ? `[${ownerFilter}] 사장님의 등록된 키오스크 기기가 없습니다.` : '등록된 키오스크 기기가 없습니다.'}
                   </td>
                 </tr>
@@ -225,12 +254,25 @@ export default function KioskManagement() {
                 filteredKiosks.map((kiosk) => (
                   <tr 
                     key={kiosk.id} 
-                    onClick={() => setCurrentKioskId(kiosk.id)}
-                    className={`hover:bg-gray-50 transition-colors cursor-pointer ${
-                      kiosk.id === currentKioskId ? 'bg-[#7C3AED]/5 border-l-4 border-[#7C3AED]' : ''
-                    }`}
+                    className="hover:bg-gray-50/50 transition-colors"
                   >
-                    <td className="px-6 py-4 font-mono font-bold text-[#7C3AED]" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-6 py-4 text-center">
+                      {kiosk.id === currentKioskId ? (
+                        <div className="inline-flex items-center space-x-1.5 bg-green-50 text-green-700 px-3 py-1.5 rounded-full text-xs font-bold border border-green-100">
+                          <CheckCircle2 size={14} className="text-green-500" />
+                          <span>현재 키오스크</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => handleSwitchKiosk(kiosk.id)}
+                          className="inline-flex items-center space-x-1.5 bg-gray-50 hover:bg-[#7C3AED]/10 text-gray-700 hover:text-[#7C3AED] px-3 py-1.5 rounded-full text-xs font-bold border border-gray-200 hover:border-[#7C3AED]/30 transition-all cursor-pointer"
+                        >
+                          <ArrowRightCircle size={14} />
+                          <span>관리 가기</span>
+                        </button>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 font-mono font-bold text-[#7C3AED]">
                       <button 
                         onClick={() => navigate(`/kiosks/${kiosk.id}`)}
                         className="hover:underline cursor-pointer text-left"
@@ -238,10 +280,10 @@ export default function KioskManagement() {
                         {kiosk.code}
                       </button>
                     </td>
-                    <td className="px-6 py-4 font-semibold text-gray-900" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-6 py-4 font-semibold text-gray-900">
                       <button
-                        onClick={() => navigate(`/stores/${kiosk.store_id}`)}
-                        className="hover:underline cursor-pointer text-left"
+                        onClick={() => handleSwitchKiosk(kiosk.id)}
+                        className="hover:underline hover:text-[#7C3AED] cursor-pointer text-left font-bold"
                       >
                         {kiosk.store_name || '-'}
                       </button>
@@ -288,6 +330,16 @@ export default function KioskManagement() {
                         <span>{kiosk.next_payment_date ? new Date(kiosk.next_payment_date).toLocaleDateString() : '-'}</span>
                       </div>
                     </td>
+                    {(user?.role === 'DEV' || user?.role === 'HEAD') && (
+                      <td className="px-6 py-4 text-center">
+                        <button
+                          onClick={(e) => handleDeleteKioskDirect(e, kiosk.id)}
+                          className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                        >
+                          삭제
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))
               )}
@@ -314,9 +366,13 @@ export default function KioskManagement() {
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none bg-white font-medium text-gray-800"
                   required
                 >
-                  {stores.map(store => (
-                    <option key={store.id} value={store.id}>{store.name}</option>
-                  ))}
+                  {stores.length === 0 ? (
+                    <option value="">(등록된 가용 점주가 없습니다)</option>
+                  ) : (
+                    stores.map(store => (
+                      <option key={store.id} value={store.id}>{store.name}</option>
+                    ))
+                  )}
                 </select>
               </div>
 

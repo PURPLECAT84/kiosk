@@ -1,6 +1,9 @@
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'Backend'))
+
 from database import engine, Base
 import models.user
-import models.store
 from sqlalchemy import text
 
 def drop_and_create():

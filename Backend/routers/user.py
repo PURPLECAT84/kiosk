@@ -82,36 +82,31 @@ async def read_user(
     users = db.execute(stmt).scalars().all()
 
     # 2. 조회된 유저들에 대해 매장명 요약 및 키오스크 수 통계 조립
-    from models.store import Store
     from models.kiosk import Kiosk
+    from models.user import BusinessInfo
     
     response_data = []
     for user in users:
-        # 각 점주가 만든 매장 목록을 생성일자 순으로 조회합니다.
-        store_stmt = select(Store).where(Store.user_id == user.id).order_by(Store.created_at.asc())
-        stores = db.execute(store_stmt).scalars().all()
-        
-        # 매장 요약 정보 조립
-        if not stores:
+        # 각 점주가 만든 사업자 등록 정보로부터 매장명 리스트 추출
+        businesses = user.businesses
+        if not businesses:
             store_names_summary = "매장 없음"
-        elif len(stores) == 1:
-            store_names_summary = stores[0].name
+        elif len(businesses) == 1:
+            store_names_summary = businesses[0].store_name
         else:
             # 복수 매장일 경우: 가장 처음 만든 매장명 외 00개 로 표기
-            store_names_summary = f"{stores[0].name} 외 {len(stores) - 1}개"
+            store_names_summary = f"{businesses[0].store_name} 외 {len(businesses) - 1}개"
             
-        # 각 점주가 가진 모든 매장의 키오스크 상태 집계
+        # 각 점주가 가진 키오스크 상태 집계
+        kiosk_stmt = select(Kiosk).where(Kiosk.user_id == user.id)
+        kiosks = db.execute(kiosk_stmt).scalars().all()
         active_kiosks = 0
         inactive_kiosks = 0
-        if stores:
-            store_ids = [s.id for s in stores]
-            kiosk_stmt = select(Kiosk).where(Kiosk.store_id.in_(store_ids))
-            kiosks = db.execute(kiosk_stmt).scalars().all()
-            for k in kiosks:
-                if k.status == "OPERATING":
-                    active_kiosks += 1
-                else:
-                    inactive_kiosks += 1
+        for k in kiosks:
+            if k.status == "OPERATING":
+                active_kiosks += 1
+            else:
+                inactive_kiosks += 1
                     
         # 응답 객체 구성
         response_data.append(UserManagementResponse(
@@ -271,8 +266,6 @@ async def add_business_info(
     """
     [초보자용 교보재 지침 - 사업자 등록]
     점주(User)가 자신의 사업자 정보(사업자 번호, 사업자명, 대표자명, 설치매장명 등)를 등록합니다.
-    이때 하위 호환성을 유지하기 위해, 입력된 설치매장명(store_name)을 기반으로 
-    'stores' 테이블에 대응되는 매장 레코드를 자동으로 생성 및 연결합니다.
     """
     if current_user.role == UserRole.STAFF:
         raise HTTPException(
@@ -281,7 +274,6 @@ async def add_business_info(
         )
 
     from models.user import BusinessInfo
-    from models.store import Store
 
     # 1. 중복 사업자 등록번호 검증
     stmt_num = select(BusinessInfo).where(BusinessInfo.business_number == body.business_number)
@@ -292,8 +284,8 @@ async def add_business_info(
             detail="이미 등록된 사업자 등록번호입니다."
         )
 
-    # 2. 중복 매장명 검증 (Stores 테이블은 매장명 고유 제약조건이 있음)
-    stmt_store = select(Store).where(Store.name == body.store_name)
+    # 2. 중복 매장명 검증
+    stmt_store = select(BusinessInfo).where(BusinessInfo.store_name == body.store_name)
     existing_store = db.execute(stmt_store).scalars().first()
     if existing_store:
         raise HTTPException(
@@ -301,30 +293,7 @@ async def add_business_info(
             detail="이미 존재하는 매장명입니다. 다른 매장명을 사용해주세요."
         )
 
-    # 3. Store 자동 생성 (하위 호환성용)
-    def generate_store_code(db_session: Session) -> str:
-        import random
-        chars = string.ascii_uppercase + string.digits
-        while True:
-            code = "ST" + "".join(random.choice(chars) for _ in range(4))
-            stmt = select(Store).where(Store.code == code)
-            if not db_session.execute(stmt).scalars().first():
-                return code
-
-    store_code = generate_store_code(db)
-    new_store = Store(
-        code=store_code,
-        name=body.store_name,
-        address="온라인 등록 주소",
-        type="Store",
-        owner_name=body.representative_name or current_user.name,
-        user_id=current_user.id,
-        status="ACTIVE"
-    )
-    db.add(new_store)
-    db.flush() # ID 생성을 위해 메모리 상에 flush
-
-    # 4. BusinessInfo 생성 및 매핑
+    # 3. BusinessInfo 생성 및 매핑
     new_business = BusinessInfo(
         user_id=current_user.id,
         business_number=body.business_number,
@@ -350,10 +319,8 @@ async def delete_business_info(
     """
     [초보자용 교보재 지침 - 사업자 삭제]
     점주가 등록한 사업자 정보를 삭제합니다.
-    사업자 정보가 삭제되면, 하위 호환성을 위해 자동 생성되었던 대응 매장(Store)도 함께 삭제하여 매장명을 반환합니다.
     """
     from models.user import BusinessInfo
-    from models.store import Store
 
     stmt = select(BusinessInfo).where(BusinessInfo.id == business_id)
     business = db.execute(stmt).scalars().first()
@@ -368,12 +335,6 @@ async def delete_business_info(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="본인의 사업자 정보만 삭제할 수 있습니다."
         )
-
-    # 대응하는 Store 삭제
-    stmt_store = select(Store).where(Store.name == business.store_name, Store.user_id == current_user.id)
-    store = db.execute(stmt_store).scalars().first()
-    if store:
-        db.delete(store)
 
     db.delete(business)
     db.commit()

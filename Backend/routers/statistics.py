@@ -5,7 +5,7 @@ from datetime import date
 from models.order import Order
 from models.user import UserInfo, UserRole
 from models.order_item import OrderItem
-from models.store import Store
+from models.kiosk import Kiosk
 from database import get_db
 from core.dependency import get_current_user
 from typing import Optional
@@ -39,18 +39,18 @@ def get_dashboard_summary (
         monthly_stmt = monthly_stmt.where(Order.kiosk_id == x_kiosk_id)
         order_stmt = order_stmt.where(Order.kiosk_id == x_kiosk_id)
 
-    # MANAGER 권한인 경우 본인 매장의 데이터만 필터링
+    # MANAGER 권한인 경우 본인 키오스크의 데이터만 필터링
     if current_user.role == UserRole.MANAGER:
-        store_ids = db.scalars(select(Store.id).where(Store.user_id == current_user.id)).all()
-        if not store_ids:
+        kiosk_ids = db.scalars(select(Kiosk.id).where(Kiosk.user_id == current_user.id)).all()
+        if not kiosk_ids:
             return {
                 "today_sales" : 0,
                 "today_orders" : 0,
                 "monthly_sales": 0
             }
-        sales_stmt = sales_stmt.where(Order.store_id.in_(store_ids))
-        monthly_stmt = monthly_stmt.where(Order.store_id.in_(store_ids))
-        order_stmt = order_stmt.where(Order.store_id.in_(store_ids))
+        sales_stmt = sales_stmt.where(Order.kiosk_id.in_(kiosk_ids))
+        monthly_stmt = monthly_stmt.where(Order.kiosk_id.in_(kiosk_ids))
+        order_stmt = order_stmt.where(Order.kiosk_id.in_(kiosk_ids))
 
     total_sales = db.scalar(sales_stmt) or 0
     monthly_sales = db.scalar(monthly_stmt) or 0
@@ -88,12 +88,12 @@ def get_best_sellers(
     if x_kiosk_id:
         stmt = stmt.where(Order.kiosk_id == x_kiosk_id)
 
-    # MANAGER 권한인 경우 본인 매장의 데이터만 필터링
+    # MANAGER 권한인 경우 본인 키오스크의 데이터만 필터링
     if current_user.role == UserRole.MANAGER:
-        store_ids = db.scalars(select(Store.id).where(Store.user_id == current_user.id)).all()
-        if not store_ids:
+        kiosk_ids = db.scalars(select(Kiosk.id).where(Kiosk.user_id == current_user.id)).all()
+        if not kiosk_ids:
             return []
-        stmt = stmt.where(Order.store_id.in_(store_ids))
+        stmt = stmt.where(Order.kiosk_id.in_(kiosk_ids))
 
     stmt = (
         stmt.group_by(OrderItem.product_name)
@@ -108,10 +108,3 @@ def get_best_sellers(
         best_seller_list.append({"product_name": row[0], "total_sold": row[1]})
 
     return best_seller_list
-
-
-
-
-
-
-

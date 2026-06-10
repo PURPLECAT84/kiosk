@@ -136,13 +136,10 @@ export default function UserManagement() {
                       {u.store_names_summary === '매장 없음' ? (
                         <span className="text-gray-400 font-medium">등록 매장 없음</span>
                       ) : (
-                        <button
-                          onClick={() => navigate(`/stores?ownerName=${encodeURIComponent(u.name)}`)}
-                          className="flex items-center gap-1.5 text-[#7C3AED] hover:underline cursor-pointer font-bold text-left group"
-                        >
-                          <Store size={16} className="text-gray-400 group-hover:text-[#7C3AED] transition-colors" />
+                        <div className="flex items-center gap-1.5 text-gray-900 font-bold text-left">
+                          <Store size={16} className="text-gray-400" />
                           {u.store_names_summary}
-                        </button>
+                        </div>
                       )}
                     </td>
                     <td className="px-6 py-4">

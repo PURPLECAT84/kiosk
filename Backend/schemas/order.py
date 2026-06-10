@@ -6,8 +6,7 @@ from typing import List, Optional
 from schemas.order_item import OrderItemCreate, OrderItemResponse
 
 class OrderCreate(BaseModel):
-    store_id: uuid.UUID
-    kiosk_id: Optional[uuid.UUID] = None
+    kiosk_id: uuid.UUID
     total_amount: int
     payment_method: str
     payment_provider: str
@@ -19,8 +18,7 @@ class OrderCreate(BaseModel):
 class OrderResponse(BaseModel):
     id: int
     order_no: Optional[str] = None
-    store_id: uuid.UUID
-    kiosk_id: Optional[uuid.UUID] = None
+    kiosk_id: uuid.UUID
     total_amount: int
     payment_method: str
     payment_provider: str

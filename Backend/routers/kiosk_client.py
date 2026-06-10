@@ -3,7 +3,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from database import get_db
 from models.kiosk import Kiosk
-from models.store import Store
 from models.category import Category
 from models.product import Product
 from models.order import Order
@@ -26,13 +25,13 @@ async def sync_kiosk(
     if not kiosk:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="등록되지 않은 키오스크 기기입니다")
     
-    # 2. 매장 조회
-    store = db.get(Store, kiosk.store_id)
-    if not store:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="키오스크 소속 매장을 찾을 수 없습니다")
+    # 2. 점주 사업자명(매장명) 조회
+    store_name = "미지정 매장"
+    if kiosk.owner and kiosk.owner.businesses:
+        store_name = kiosk.owner.businesses[0].store_name
     
     # 3. 카테고리 리스트 조회 (sequence 오름차순 정렬)
-    cat_stmt = select(Category).where(Category.store_id == store.id).order_by(Category.sequence.asc())
+    cat_stmt = select(Category).where(Category.kiosk_id == kiosk.id).order_by(Category.sequence.asc())
     categories = db.execute(cat_stmt).scalars().all()
     
     cat_responses = []
@@ -72,8 +71,8 @@ async def sync_kiosk(
         ))
         
     return KioskSyncResponse(
-        store_name=store.name,
-        kiosk_type=kiosk.type, # 📝 [초보자용 멘토링] 키오스크 기기 타입(외식형/판매형)을 추가하여 클라이언트가 추가 API 조회 없이 즉각 인지하도록 처리합니다.
+        store_name=store_name,
+        kiosk_type=kiosk.type,
         categories=cat_responses
     )
 
@@ -83,14 +82,14 @@ async def mock_payment(
     request: MockPaymentRequest,
     db: Session = Depends(get_db)
 ):
-    # 1. 매장 조회 및 결제 규칙 체크
-    store = db.get(Store, request.store_id)
-    if not store:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="매장을 찾을 수 없습니다")
+    # 1. 키오스크 조회
+    kiosk = db.get(Kiosk, request.kiosk_id)
+    if not kiosk:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="키오스크를 찾을 수 없습니다")
     
     # 2. 주문번호(order_no) 결정
     order_no = None
-    if store.type == "Restaurant" and request.order_no:
+    if kiosk.type == "Restaurant" and request.order_no:
         digits = "".join(c for c in request.order_no if c.isdigit())
         if len(digits) >= 10:
             order_no = digits
@@ -107,8 +106,7 @@ async def mock_payment(
         # 4. 영수증 DB 적재
         new_order = Order(
             order_no=order_no,
-            store_id=request.store_id,
-            kiosk_id=request.kiosk_id, # 📝 [초보자용 멘토링] 어떤 기기에서 주문이 들어왔는지 필터링하고 매출 통계를 낼 수 있도록 결제 완료 시 kiosk_id를 함께 저장합니다.
+            kiosk_id=request.kiosk_id,
             total_amount=request.total_amount,
             payment_method=request.payment_method,
             payment_provider=request.payment_provider,

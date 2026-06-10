@@ -2,25 +2,27 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useKiosk } from '../context/KioskContext';
-import { Store, Monitor, LayoutDashboard, Loader2, ArrowRight, RefreshCw, CreditCard, Receipt, TrendingUp, BarChart3 } from 'lucide-react';
+import { Monitor, LayoutDashboard, Loader2, ArrowRight, RefreshCw, CreditCard, Receipt, TrendingUp, BarChart3 } from 'lucide-react';
 
-interface StoreItem {
+interface KioskItem {
   id: string;
   code: string;
+  user_id: string;
+  store_name: string | null;
   name: string;
-  address: string;
+  model_name: string | null;
   type: string;
-  owner_name: string | null;
   status: string;
-  created_date: string;
-  kiosk_count: number;
+  payment_status: string;
+  next_payment_date: string | null;
+  created_at: string;
 }
 
 export default function DashboardHome() {
   const { token, user } = useAuth();
   const { currentKioskId, currentKioskName } = useKiosk();
   const navigate = useNavigate();
-  const [stores, setStores] = useState<StoreItem[]>([]);
+  const [kiosks, setKiosks] = useState<KioskItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -29,17 +31,17 @@ export default function DashboardHome() {
   const [bestSellers, setBestSellers] = useState<{ product_name: string; total_sold: number }[]>([]);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
 
-  const fetchStores = async () => {
+  const fetchKiosks = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/store/', {
+      const res = await fetch('/kiosks/my', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      if (!res.ok) throw new Error('매장 정보를 불러오는데 실패했습니다.');
+      if (!res.ok) throw new Error('키오스크 정보를 불러오는데 실패했습니다.');
       const data = await res.json();
-      setStores(data);
+      setKiosks(data);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -77,7 +79,7 @@ export default function DashboardHome() {
   };
 
   useEffect(() => {
-    fetchStores();
+    fetchKiosks();
   }, [token]);
 
   useEffect(() => {
@@ -92,9 +94,8 @@ export default function DashboardHome() {
     );
   }
 
-  const isManager = user?.role === 'MANAGER';
-  const totalStores = stores.length;
-  const totalKiosks = stores.reduce((acc, s) => acc + s.kiosk_count, 0);
+  const totalKiosks = kiosks.length;
+  const activeKiosks = kiosks.filter(k => k.status === 'OPERATING').length;
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 pb-20">
@@ -104,24 +105,12 @@ export default function DashboardHome() {
           {user?.name} 님, 환영합니다!
         </h1>
         <p className="text-gray-500 text-sm mt-1">
-          {isManager 
-            ? '관리 중인 가맹 매장 현황을 한눈에 파악하세요.' 
-            : 'MOKI 키오스크 시스템 통합 대시보드 홈입니다.'}
+          MOKI 키오스크 시스템 통합 대시보드 홈입니다.
         </p>
       </div>
 
       {/* 요약 카드 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex items-center space-x-4">
-          <div className="p-4 bg-purple-50 text-[#7C3AED] rounded-2xl">
-            <Store size={28} />
-          </div>
-          <div>
-            <p className="text-gray-400 text-sm font-semibold">관리 매장</p>
-            <p className="text-2xl font-extrabold text-gray-900">{totalStores} 개</p>
-          </div>
-        </div>
-
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex items-center space-x-4">
           <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl">
             <Monitor size={28} />
@@ -132,17 +121,25 @@ export default function DashboardHome() {
           </div>
         </div>
 
-        {!isManager && (
-          <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex items-center space-x-4">
-            <div className="p-4 bg-amber-50 text-amber-600 rounded-2xl">
-              <RefreshCw size={28} />
-            </div>
-            <div>
-              <p className="text-gray-400 text-sm font-semibold">시스템 권한</p>
-              <p className="text-lg font-extrabold text-gray-900">{user?.role} 계정</p>
-            </div>
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex items-center space-x-4">
+          <div className="p-4 bg-green-50 text-green-600 rounded-2xl">
+            <RefreshCw size={28} />
           </div>
-        )}
+          <div>
+            <p className="text-gray-400 text-sm font-semibold">운영 중 기기</p>
+            <p className="text-2xl font-extrabold text-gray-900">{activeKiosks} 대</p>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex items-center space-x-4">
+          <div className="p-4 bg-purple-50 text-[#7C3AED] rounded-2xl">
+            <LayoutDashboard size={28} />
+          </div>
+          <div>
+            <p className="text-gray-400 text-sm font-semibold">시스템 권한</p>
+            <p className="text-lg font-extrabold text-gray-900">{user?.role} 계정</p>
+          </div>
+        </div>
       </div>
 
       {/* 실시간 기기별 매출 및 통계 현황 (STAFF 제외) */}
@@ -228,15 +225,15 @@ export default function DashboardHome() {
         </div>
       )}
 
-      {/* 내 매장 목록 섹션 */}
+      {/* 내 키오스크 목록 섹션 */}
       <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 space-y-6">
         <div className="flex justify-between items-center">
           <div>
             <h3 className="text-xl font-bold text-gray-900 flex items-center">
-              <Store className="mr-2 text-[#7C3AED]" size={24} /> 
-              {isManager ? '내가 관리하는 매장 목록' : '전체 가맹 매장 목록'}
+              <Monitor className="mr-2 text-[#7C3AED]" size={24} /> 
+              {'내가 관리하는 키오스크 기기 목록'}
             </h3>
-            <p className="text-gray-500 text-xs mt-1">아래의 매장을 선택하여 상세 정보 및 키오스크를 관리하세요.</p>
+            <p className="text-gray-500 text-xs mt-1">기기를 클릭하면 해당 키오스크가 활성화되고 대시보드가 새로고침됩니다.</p>
           </div>
         </div>
 
@@ -247,37 +244,43 @@ export default function DashboardHome() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {stores.length === 0 ? (
+          {kiosks.length === 0 ? (
             <div className="col-span-full text-center py-12 text-gray-400 font-medium">
-              등록된 매장이 없습니다.
+              등록된 키오스크 기기가 없습니다.
             </div>
           ) : (
-            stores.map((store) => (
+            kiosks.map((kiosk) => (
               <div 
-                key={store.id} 
-                onClick={() => navigate(`/stores/${store.id}`)}
-                className="bg-gray-50 hover:bg-purple-50/30 border border-gray-100 hover:border-[#7C3AED]/30 rounded-3xl p-6 transition-all duration-200 cursor-pointer flex flex-col justify-between group"
+                key={kiosk.id} 
+                onClick={() => {
+                  localStorage.setItem('currentKioskId', kiosk.id);
+                  localStorage.setItem('currentKioskName', kiosk.name);
+                  window.location.reload();
+                }}
+                className={`bg-gray-50 hover:bg-purple-50/30 border rounded-3xl p-6 transition-all duration-200 cursor-pointer flex flex-col justify-between group ${
+                  kiosk.id === currentKioskId ? 'border-[#7C3AED] bg-purple-50/10' : 'border-gray-100 hover:border-[#7C3AED]/30'
+                }`}
               >
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="bg-[#7C3AED]/10 text-[#7C3AED] px-3 py-1 rounded-full text-xs font-bold font-mono">
-                      {store.code}
+                      {kiosk.code}
                     </span>
                     <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                      store.status === 'ACTIVE' ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'
+                      kiosk.status === 'OPERATING' ? 'bg-green-50 text-green-600' : 'bg-yellow-50 text-yellow-600'
                     }`}>
-                      {store.status === 'ACTIVE' ? '영업 중' : '비활성'}
+                      {kiosk.status === 'OPERATING' ? '가동 중' : '대기 중'}
                     </span>
                   </div>
-                  <h4 className="text-lg font-extrabold text-gray-900 group-hover:text-[#7C3AED] transition-colors">{store.name}</h4>
-                  <p className="text-gray-500 text-xs line-clamp-1">{store.address}</p>
+                  <h4 className="text-lg font-extrabold text-gray-900 group-hover:text-[#7C3AED] transition-colors">{kiosk.name}</h4>
+                  <p className="text-gray-500 text-xs line-clamp-1">가맹 매장명: <span className="font-semibold text-gray-700">{kiosk.store_name || '미지정 매장'}</span></p>
                 </div>
                 <div className="mt-6 pt-4 border-t border-gray-100/60 flex justify-between items-center">
                   <div className="text-xs text-gray-600 font-semibold">
-                    연결된 키오스크: <span className="text-gray-950 font-bold">{store.kiosk_count}대</span>
+                    구분: <span className="text-gray-950 font-bold">{kiosk.type === 'Restaurant' ? '외식형' : '판매형'}</span>
                   </div>
                   <span className="text-xs text-[#7C3AED] font-bold flex items-center gap-1 group-hover:translate-x-1 transition-transform">
-                    상세보기 <ArrowRight size={14} />
+                    활성화 및 스위칭 <ArrowRight size={14} />
                   </span>
                 </div>
               </div>

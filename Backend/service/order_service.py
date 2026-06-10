@@ -34,16 +34,16 @@ async def create_order_transaction(db: Session, order_data: OrderCreate) -> Orde
         print("토스 결제 승인 완료")
 
     try:
-        # [0단계] 매장 정보 조회하여 주문번호 로직 결정
-        from models.store import Store
+        # [0단계] 키오스크 정보 조회하여 주문번호 로직 결정
+        from models.kiosk import Kiosk
         import random
         
-        store = db.get(Store, order_data.store_id)
-        if not store:
-            raise HTTPException(status_code=404, detail="매장을 찾을 수 없습니다.")
+        kiosk = db.get(Kiosk, order_data.kiosk_id)
+        if not kiosk:
+            raise HTTPException(status_code=404, detail="키오스크를 찾을 수 없습니다.")
             
         order_no = None
-        if store.type == "Restaurant" and order_data.order_no:
+        if kiosk.type == "Restaurant" and order_data.order_no:
             # 외식형(Restaurant) 결제 프로세스: 입력받은 휴대폰 번호(하이픈 제외 숫자)를 그대로 대체 적재
             digits = "".join(c for c in order_data.order_no if c.isdigit())
             if len(digits) >= 10:
@@ -58,7 +58,6 @@ async def create_order_transaction(db: Session, order_data: OrderCreate) -> Orde
         # [2단계] 영수증(Order) 뼈대 만들기
         new_order = Order(
             order_no=order_no,
-            store_id=order_data.store_id,
             kiosk_id=order_data.kiosk_id,
             total_amount=order_data.total_amount,
             payment_method=order_data.payment_method,

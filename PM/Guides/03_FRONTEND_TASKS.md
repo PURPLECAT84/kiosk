@@ -20,6 +20,12 @@
 - `[ ]` [Web] 외식형(Type B) / 상품판매형(Type A) 매장 타입 스위칭 토글 UI 구현
 - `[ ]` [App] 하단 고정 장바구니 영역 UI 및 리플 애니메이션 뼈대 구축
 - `[ ]` [App] ESC/POS 범용 프린터 통신 추상화 클래스(인터페이스) 설계
+- `[x]` [Web] (20260610-1) 매장 관리(StoreManagement.tsx, StoreDetail.tsx) 화면 파일 물리적 삭제 및 라우팅 제거
+- `[x]` [Web] (20260610-1) 대시보드 홈(DashboardHome.tsx)에서 기존의 `/store/` 호출을 제거하고, 내 관리 기기 목록(`/kiosks/my`)을 Bento Grid 형태로 노출하도록 리팩토링 (404 index.html JSON '<' 파싱 에러 해결)
+- `[x]` [Web] (20260610-1) 대시보드 홈 하단 기기 카드 클릭 시 활성 기기가 전환되며 새로고침하여 즉시 반영되는 스위칭 메커니즘 연동
+- `[x]` [Web] (20260610-1) KioskManagement.tsx에서 DEV/HEAD 권한인 경우 매장이 없어도 상시 기기를 추가할 수 있게 하고, 목록에서 바로 삭제할 수 있도록 작업 열(삭제 버튼) 추가
+- `[x]` [Web] (20260610-1) KioskDetail.tsx에서 매장 상세로 돌아가던 뒤로가기/삭제 경로를 모두 `/kiosks` 목록 화면으로 리다이렉트 처리
+- `[x]` [Web] (20260610-1) KioskContext.tsx에서 불필요한 store_id 및 currentStoreId 속성 제거
 - `[x]` [Web] (20260508-1) Vite Proxy(`vite.config.ts`) 적용 및 프론트엔드 API 호출 상대경로 리팩토링 완료
 - `[x]` [Web] (20260508-1) React Router 기반 로그인 상태 확인 시 AuthContext 비동기 지연에 의한 튕김(Race Condition) 방어 처리 완료 (`isLoading` 동기 갱신)
 - `[x]` [Web] (20260508-1) React Strict Mode에 의한 소셜 로그인 토큰 중복 발급 및 DB 에러 방지 처리 완료 (`useRef` 도입)

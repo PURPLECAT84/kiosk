@@ -7,7 +7,7 @@ import uuid
 from typing import List, Optional
 from datetime import datetime, time
 from models.product import Product
-from models.store import Store
+from models.kiosk import Kiosk
 from database import get_db
 from models.order import Order
 from models.user import UserInfo, UserRole
@@ -37,33 +37,28 @@ async def create_order(
     db: Session = Depends(get_db)
 ):
     new_order = await create_order_transaction(db, order_data)
-    # 📝 [초보자용 멘토링] 지연 로딩(Lazy Loading)으로 인한 DetachedInstanceError 방지를 위해 expunge 처리를 하지 않고 세션이 열린 상태로 반환합니다.
     return new_order
 
 
 """===================== 매출 리스트 조회 ============================"""
 @router.get("/", response_model=List[OrderResponse])
 async def get_orders(
-    store_id: uuid.UUID,
+    kiosk_id: uuid.UUID,
     start_date: datetime | None = None,
     end_date: datetime | None = None,
     x_kiosk_id: Optional[uuid.UUID] = Header(None, alias="X-Kiosk-Id"),
     db: Session = Depends(get_db),
     current_user: UserInfo = Depends(get_current_user)
 ):
-    # 권한 검증: 매장 존재 여부 및 본인 매장 소유권 체크 (MANAGER / STAFF 권한일 때)
-    target_store = db.get(Store, store_id)
-    if not target_store:
-        raise HTTPException(status_code=404, detail="해당 매장을 찾을 수 없습니다.")
+    # 권한 검증: 키오스크 존재 여부 및 본인 키오스크 소유권 체크
+    target_kiosk = db.get(Kiosk, kiosk_id)
+    if not target_kiosk:
+        raise HTTPException(status_code=404, detail="해당 키오스크를 찾을 수 없습니다.")
 
-    if current_user.role == UserRole.MANAGER and target_store.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="본인 매장의 매출 내역만 조회할 수 있습니다.")
-    elif current_user.role == UserRole.STAFF and current_user.store_id != store_id:
-        raise HTTPException(status_code=403, detail="본인 매장의 매출 내역만 조회할 수 있습니다.")
+    if current_user.role not in [UserRole.DEV, UserRole.HEAD, UserRole.MASTER] and target_kiosk.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="본인 키오스크의 매출 내역만 조회할 수 있습니다.")
     
-    stmt = select(Order).where(Order.store_id == store_id)
-
-    # X-Kiosk-Id 헤더 필터 추가
+    stmt = select(Order).where(Order.kiosk_id == kiosk_id)
     if x_kiosk_id:
         stmt = stmt.where(Order.kiosk_id == x_kiosk_id)
 
@@ -76,7 +71,6 @@ async def get_orders(
     stmt = stmt.order_by(desc(Order.created_date))
     orders = db.scalars(stmt).all()
 
-    # 📝 [초보자용 멘토링] Pydantic 모델로 먼저 변환한 뒤 마스킹하여 DB 세션 오염을 방지하고 DetachedInstanceError도 예방합니다.
     response_orders = []
     for order in orders:
         pydantic_order = OrderResponse.model_validate(order)
@@ -97,13 +91,10 @@ async def get_order_detail(
     if not order:
         raise HTTPException(status_code=404, detail="해당 주문 내역을 찾을 수 없습니다.")
         
-    # 권한 체크: MANAGER나 STAFF의 경우 소속 매장 주문인지 확인
-    if current_user.role == UserRole.MANAGER and order.store.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="본인 매장의 주문만 열람할 수 있습니다.")
-    elif current_user.role == UserRole.STAFF and current_user.store_id != order.store_id:
-        raise HTTPException(status_code=403, detail="본인 매장의 주문만 열람할 수 있습니다.")
+    # 권한 체크: 본인 키오스크의 주문인지 확인
+    if current_user.role not in [UserRole.DEV, UserRole.HEAD, UserRole.MASTER] and order.kiosk.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="본인 키오스크의 주문만 열람할 수 있습니다.")
         
-    # 마스킹이 해제된 원본 데이터 반환 (DetachedInstanceError 방지를 위해 expunge 제거)
     return order
 
 
@@ -121,10 +112,8 @@ async def delete_orders(
         raise HTTPException(status_code=400, detail="이미 취소(환불) 처리된 주문입니다.")
         
     # 권한 체크
-    if current_user.role == UserRole.MANAGER and order.store.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="본인 매장의 주문만 환불 처리할 수 있습니다.")
-    elif current_user.role == UserRole.STAFF and current_user.store_id != order.store_id:
-        raise HTTPException(status_code=403, detail="본인 매장의 주문만 환불 처리할 수 있습니다.")
+    if current_user.role not in [UserRole.DEV, UserRole.HEAD, UserRole.MASTER] and order.kiosk.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="본인 키오스크의 주문만 환불 처리할 수 있습니다.")
     
     # 1. 주문 상태 변경 및 기본 환불 정보 기록
     order.status = "REFUNDED"
@@ -161,10 +150,8 @@ async def refund_order(
         raise HTTPException(status_code=400, detail="이미 취소(환불) 처리된 주문입니다.")
         
     # 권한 체크
-    if current_user.role == UserRole.MANAGER and order.store.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="본인 매장의 주문만 환불 처리할 수 있습니다.")
-    elif current_user.role == UserRole.STAFF and current_user.store_id != order.store_id:
-        raise HTTPException(status_code=403, detail="본인 매장의 주문만 환불 처리할 수 있습니다.")
+    if current_user.role not in [UserRole.DEV, UserRole.HEAD, UserRole.MASTER] and order.kiosk.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="본인 키오스크의 주문만 환불 처리할 수 있습니다.")
     
     # 1. 주문 상태 변경 및 환불 정보 기록
     order.status = "REFUNDED"

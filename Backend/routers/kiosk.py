@@ -3,7 +3,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from database import get_db
 from models.kiosk import Kiosk
-from models.store import Store
 from models.user import UserInfo, UserRole
 from schemas.kiosk import KioskCreate, KioskResponse, KioskUpdate, KioskAdminResponse, KioskAdminCreate, KioskAdminUpdate
 from core.dependency import require_roles, get_current_user
@@ -35,16 +34,20 @@ async def create_kiosk(
     db: Session = Depends(get_db),
     current_user: UserInfo = Depends(require_roles(general_roles))
 ):
-    # 매장 존재 여부 검증
-    store_stmt = select(Store).where(Store.id == kiosk.store_id)
-    store = db.execute(store_stmt).scalars().first()
-    if not store:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="매장을 찾을 수 없습니다")
+    # 점주 존재 여부 검증
+    owner_stmt = select(UserInfo).where(UserInfo.id == kiosk.user_id)
+    owner = db.execute(owner_stmt).scalars().first()
+    if not owner:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="점주(사용자)를 찾을 수 없습니다")
     
+    store_name = "미지정 매장"
+    if owner.businesses:
+        store_name = owner.businesses[0].store_name
+        
     code = generate_kiosk_code(db)
     db_kiosk = Kiosk(
         code=code,
-        store_id=kiosk.store_id,
+        user_id=kiosk.user_id,
         name=kiosk.name,
         model_name=kiosk.model_name,
         type=kiosk.type,
@@ -54,19 +57,19 @@ async def create_kiosk(
     db.add(db_kiosk)
     db.flush() # UUID 생성을 위해 flush
     
-    # 4. KioskAdmin 매핑 (최초 생성 시 매장 점주 및 생성자를 관리자로 매핑)
+    # 4. KioskAdmin 매핑 (최초 생성 시 점주 및 생성자를 관리자로 매핑)
     from models.kiosk_admin import KioskAdmin
     
-    # 4-1. 매장 점주 매핑
+    # 4-1. 점주 매핑
     owner_admin = KioskAdmin(
         kiosk_id=db_kiosk.id,
-        user_id=store.user_id,
+        user_id=owner.id,
         role="MASTER"
     )
     db.add(owner_admin)
     
     # 4-2. 생성자가 점주와 다르고 DEV/HEAD/MASTER 권한인 경우 생성자도 매핑
-    if current_user.id != store.user_id:
+    if current_user.id != owner.id:
         creator_admin = KioskAdmin(
             kiosk_id=db_kiosk.id,
             user_id=current_user.id,
@@ -77,7 +80,7 @@ async def create_kiosk(
     db.commit()
     db.refresh(db_kiosk)
     
-    setattr(db_kiosk, "store_name", store.name)
+    setattr(db_kiosk, "store_name", store_name)
     return db_kiosk
 
 
@@ -85,35 +88,27 @@ async def create_kiosk(
 async def read_kiosk(
     skip: int = 0,
     limit: int = 100,
-    store_id: uuid.UUID | None = None,
+    user_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
     current_user: UserInfo = Depends(require_roles(general_roles))
 ):
-    stmt = select(Kiosk, Store.name).join(Store, Kiosk.store_id == Store.id)
-    # 📝 [초보자를 위한 멘토링 주석]
-    # 키오스크 조회 시 사용자의 권한(Role)에 따른 데이터 필터링 흐름을 정의합니다.
-    # 1. MANAGER 권한(사장님): 본인의 매장(Store.user_id == current_user.id)에 속한 키오스크만 볼 수 있어야 합니다.
-    #    - 이때 만약 사장님이 여러 매장 중 특정 매장(store_id)을 필터링하여 조회를 원할 경우, store_id 검색 조건도 함께 적용해 줍니다.
-    # 2. MASTER / DEV / HEAD 권한(본사 및 개발자): 전 매장의 키오스크를 볼 수 있으며, 특정 매장(store_id)을 선택하면 해당 매장의 키오스크만 필터링합니다.
+    stmt = select(Kiosk)
+    
     if current_user.role == UserRole.MANAGER:
-        # 사장님의 경우 본인 소유의 매장에 해당하는 키오스크만 가져오도록 1차 필터링
-        stmt = stmt.where(Store.user_id == current_user.id)
-        
-        # 사장님이 조회 화면이나 온보딩 화면에서 특정 매장(store_id)을 명시적으로 선택한 경우, 2차 필터링 추가
-        if store_id:
-            stmt = stmt.where(Kiosk.store_id == store_id)
-            
-    # 사장님이 아닌 본사 관리자나 개발자(DEV/MASTER) 권한인데, 특정 매장을 필터링하여 보고 싶어 하는 경우
-    elif store_id:
-        stmt = stmt.where(Kiosk.store_id == store_id)
+        stmt = stmt.where(Kiosk.user_id == current_user.id)
+    elif user_id:
+        stmt = stmt.where(Kiosk.user_id == user_id)
         
     stmt = stmt.offset(skip).limit(limit)
-    results = db.execute(stmt).all()
+    kiosks = db.execute(stmt).scalars().all()
     
     response_data = []
-    for kiosk, store_name in results:
-        setattr(kiosk, "store_name", store_name)
-        response_data.append(kiosk)
+    for k in kiosks:
+        store_name = "미지정 매장"
+        if k.owner and k.owner.businesses:
+            store_name = k.owner.businesses[0].store_name
+        setattr(k, "store_name", store_name)
+        response_data.append(k)
         
     return response_data
 
@@ -126,16 +121,17 @@ async def read_active_stores(
     """
     [초보자용 교보재 지침 - 사업자 확인 매장 조회]
     사업자 인증(is_business_verified=True)을 통과한 점주(User)들의 매장 목록만 조회합니다.
-    관리자(DEV, HEAD, MASTER)가 키오스크를 신규 등록할 때, 어떤 매장에 키오스크를 귀속시킬지 
-    선택하는 팝업 목록에 사용됩니다.
+    DEV/HEAD 권한인 경우 모든 점주(MANAGER)를 조회할 수 있습니다.
     """
-    stmt = select(Store).join(UserInfo, Store.user_id == UserInfo.id).where(UserInfo.is_business_verified == True)
-    
-    if current_user.role == UserRole.MANAGER:
-        stmt = stmt.where(Store.user_id == current_user.id)
+    if current_user.role in [UserRole.DEV, UserRole.HEAD]:
+        stmt = select(UserInfo).where(UserInfo.role == UserRole.MANAGER)
+    else:
+        stmt = select(UserInfo).where(UserInfo.is_business_verified == True)
+        if current_user.role == UserRole.MANAGER:
+            stmt = stmt.where(UserInfo.id == current_user.id)
         
-    stores = db.execute(stmt).scalars().all()
-    return [{"id": s.id, "name": s.name, "owner_name": s.owner_name} for s in stores]
+    users = db.execute(stmt).scalars().all()
+    return [{"id": u.id, "name": u.businesses[0].store_name if u.businesses else "미지정 매장", "owner_name": u.name} for u in users]
 
 
 @router.get("/my", response_model=List[KioskResponse], summary="내가 관리하는 기기 리스트 조회")
@@ -146,25 +142,25 @@ async def read_my_kiosks(
     """
     [초보자용 교보재 지침 - 관리 대상 키오스크 조회]
     현재 로그인한 사용자가 관리 권한을 가지고 있는 키오스크 리스트를 반환합니다.
-    - DEV, HEAD 권한자는 모든 키오스크를 관리할 수 있으므로 전체 목록을 반환합니다.
-    - 그 외(MASTER, MANAGER, STAFF) 사용자는 'kiosk_admins' 관계 매핑에 등록된 키오스크만 필터링하여 반환합니다.
     """
     from models.kiosk_admin import KioskAdmin
     
     if current_user.role in [UserRole.DEV, UserRole.HEAD]:
-        stmt = select(Kiosk, Store.name).join(Store, Kiosk.store_id == Store.id)
-        results = db.execute(stmt).all()
+        stmt = select(Kiosk)
+        results = db.execute(stmt).scalars().all()
     else:
         stmt = (
-            select(Kiosk, Store.name)
-            .join(Store, Kiosk.store_id == Store.id)
+            select(Kiosk)
             .join(KioskAdmin, Kiosk.id == KioskAdmin.kiosk_id)
             .where(KioskAdmin.user_id == current_user.id)
         )
-        results = db.execute(stmt).all()
+        results = db.execute(stmt).scalars().all()
         
     response_data = []
-    for kiosk, store_name in results:
+    for kiosk in results:
+        store_name = "미지정 매장"
+        if kiosk.owner and kiosk.owner.businesses:
+            store_name = kiosk.owner.businesses[0].store_name
         setattr(kiosk, "store_name", store_name)
         response_data.append(kiosk)
         
@@ -177,16 +173,18 @@ async def get_kiosk_detail(
     db: Session = Depends(get_db),
     current_user: UserInfo = Depends(require_roles(general_roles))
 ):
-    stmt = select(Kiosk, Store.name).join(Store, Kiosk.store_id == Store.id).where(Kiosk.id == kiosk_id)
-    result = db.execute(stmt).first()
-    if not result:
+    stmt = select(Kiosk).where(Kiosk.id == kiosk_id)
+    kiosk = db.execute(stmt).scalars().first()
+    if not kiosk:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="키오스크를 찾을 수 없습니다")
     
-    kiosk, store_name = result
-    
-    # MANAGER 권한 검증: 본인 매장의 키오스크인지 체크
-    if current_user.role == UserRole.MANAGER and kiosk.store.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="본인 매장의 키오스크 정보만 열람할 수 있습니다")
+    # MANAGER 권한 검증: 본인 소유의 키오스크인지 체크
+    if current_user.role == UserRole.MANAGER and kiosk.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="본인 소유의 키오스크 정보만 열람할 수 있습니다")
+        
+    store_name = "미지정 매장"
+    if kiosk.owner and kiosk.owner.businesses:
+        store_name = kiosk.owner.businesses[0].store_name
         
     setattr(kiosk, "store_name", store_name)
     return kiosk
@@ -204,11 +202,9 @@ async def update_kiosk(
     if not kiosk:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="키오스크를 찾을 수 없습니다")
         
-    # MANAGER 권한 검증: 본인 매장의 키오스크인지 체크
-    store_stmt = select(Store).where(Store.id == kiosk.store_id)
-    store = db.execute(store_stmt).scalars().first()
-    if current_user.role == UserRole.MANAGER and store.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="본인 매장의 키오스크 정보만 수정할 수 있습니다")
+    # MANAGER 권한 검증: 본인 소유의 키오스크인지 체크
+    if current_user.role == UserRole.MANAGER and kiosk.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="본인 소유의 키오스크 정보만 수정할 수 있습니다")
 
     # 결제 정보 수정 권한 제한 검증
     if body.payment_status is not None or body.next_payment_date is not None:
@@ -229,9 +225,11 @@ async def update_kiosk(
     db.commit()
     db.refresh(kiosk)
     
-    # Response용 store_name 조회 및 바인딩
-    setattr(kiosk, "store_name", store.name)
+    store_name = "미지정 매장"
+    if kiosk.owner and kiosk.owner.businesses:
+        store_name = kiosk.owner.businesses[0].store_name
     
+    setattr(kiosk, "store_name", store_name)
     return kiosk
 
 
@@ -246,11 +244,9 @@ async def delete_kiosk(
     if not kiosk:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="키오스크를 찾을 수 없습니다")
         
-    # MANAGER 권한 검증: 본인 매장의 키오스크인지 체크
-    store_stmt = select(Store).where(Store.id == kiosk.store_id)
-    store = db.execute(store_stmt).scalars().first()
-    if current_user.role == UserRole.MANAGER and store.user_id != current_user.id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="본인 매장의 키오스크만 삭제할 수 있습니다")
+    # MANAGER 권한 검증: 본인 소유의 키오스크인지 체크
+    if current_user.role == UserRole.MANAGER and kiosk.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="본인 소유의 키오스크만 삭제할 수 있습니다")
         
     db.delete(kiosk)
     db.commit()

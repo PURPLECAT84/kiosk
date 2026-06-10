@@ -10,7 +10,7 @@ from database import Base
 
 # 순환 참조 에러 방지용 가짜 import!
 if TYPE_CHECKING:
-    from models.store import Store
+    from models.kiosk import Kiosk
 
 # 2. Enum 정의 (Python 표준 라이브러리 사용)
 class UserRole(str, enum.Enum):
@@ -45,16 +45,12 @@ class UserInfo(Base):
     # Enum 적용
     role: Mapped[UserRole] = mapped_column(default=UserRole.NONE) #권한
     status: Mapped[UserStatus] = mapped_column(default=UserStatus.PENDING) #상태
-    store_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("stores.id", ondelete="SET NULL")) #소속 매장아이디 (복수가능)
    
 
     # 관계 설정 (1:N)
     businesses: Mapped[List["BusinessInfo"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
-    owned_stores: Mapped[List["Store"]] = relationship(
-        "Store", foreign_keys="[Store.user_id]", back_populates="owner"
-    )
-    store: Mapped[Optional["Store"]] = relationship(
-        "Store", foreign_keys="[UserInfo.store_id]", back_populates="staff_members"
+    kiosks: Mapped[List["Kiosk"]] = relationship(
+        "Kiosk", foreign_keys="[Kiosk.user_id]", back_populates="owner", cascade="all, delete-orphan"
     )
 
 

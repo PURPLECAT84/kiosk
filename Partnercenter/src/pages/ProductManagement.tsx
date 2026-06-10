@@ -14,29 +14,17 @@ interface ProductItem {
   barcode: string | null;
   name: string;
   price: number;
-  buy_from: string | null;
   created_date: string;
   image: string;
   stock: number;
   stock_managed: boolean;
   is_active: boolean;
   sequence: number;
-  kiosk_id: string | null;
-}
-
-interface StoreItem {
-  id: string;
-  name: string;
-  type: string;
+  kiosk_id: string;
 }
 
 interface CategoryItem {
   id: number;
-  name: string;
-}
-
-interface KioskItem {
-  id: string;
   name: string;
 }
 
@@ -45,18 +33,16 @@ export default function ProductManagement() {
   const { currentKioskId } = useKiosk();
   
   // States
-  const [stores, setStores] = useState<StoreItem[]>([]);
-  const [selectedStore, setSelectedStore] = useState<StoreItem | null>(null);
+  const [currentKiosk, setCurrentKiosk] = useState<any>(null);
   const [products, setProducts] = useState<ProductItem[]>([]);
   const [categories, setCategories] = useState<CategoryItem[]>([]);
-  const [kdoubleKiosks, setKdoubleKiosks] = useState<KioskItem[]>([]);
   
   // Search & Filter
   const [searchName, setSearchName] = useState('');
   const [filterActive, setFilterActive] = useState<string>('all'); // 'all', 'active', 'inactive'
 
   // Loading & Error states
-  const [isLoadingStores, setIsLoadingStores] = useState(true);
+  const [isLoadingKiosk, setIsLoadingKiosk] = useState(true);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
   const [error, setError] = useState('');
 
@@ -69,33 +55,37 @@ export default function ProductManagement() {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [productToEdit, setProductToEdit] = useState<ProductItem | null>(null);
 
-  // 1. 점주 매장 목록 조회
-  const fetchStores = async () => {
-    setIsLoadingStores(true);
+  // 1. 현재 키오스크 상세 조회
+  const fetchKioskDetail = async () => {
+    if (!currentKioskId) {
+      setIsLoadingKiosk(false);
+      return;
+    }
+    setIsLoadingKiosk(true);
     try {
-      const res = await fetch('/store/', {
+      const res = await fetch(`/kiosks/${currentKioskId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      if (!res.ok) throw new Error('매장 목록을 가져오지 못했습니다.');
-      const data: StoreItem[] = await res.json();
-      setStores(data);
-      if (data.length > 0) {
-        setSelectedStore(data[0]);
+      if (res.status === 403) {
+        throw new Error('키오스크 접근 권한이 없습니다 (403).');
       }
+      if (!res.ok) throw new Error('키오스크 정보를 가져오지 못했습니다.');
+      const data = await res.json();
+      setCurrentKiosk(data);
     } catch (err: any) {
       setError(err.message);
     } finally {
-      setIsLoadingStores(false);
+      setIsLoadingKiosk(false);
     }
   };
 
-  // 2. 상품 목록 로드 (검색 필터 적용 및 활성 키오스크 필터링)
-  const fetchProducts = async (storeId: string) => {
-    if (!storeId) return;
+  // 2. 상품 목록 로드
+  const fetchProducts = async () => {
+    if (!currentKioskId) return;
     setIsLoadingProducts(true);
     setSelectedIds([]);
     try {
-      let query = `/products/store/${storeId}`;
+      let query = `/products/kiosk/${currentKioskId}`;
       const params: string[] = [];
       if (searchName) {
         params.push(`name=${encodeURIComponent(searchName)}`);
@@ -111,8 +101,7 @@ export default function ProductManagement() {
 
       const res = await fetch(query, {
         headers: { 
-          'Authorization': `Bearer ${token}`,
-          ...(currentKioskId ? { 'X-Kiosk-Id': currentKioskId } : {})
+          'Authorization': `Bearer ${token}`
         }
       });
       if (!res.ok) throw new Error('상품 목록을 가져오지 못했습니다.');
@@ -125,27 +114,18 @@ export default function ProductManagement() {
     }
   };
 
-  // 3. 카테고리 & 키오스크 목록 가져오기 (매핑/비교용 및 활성 키오스크 필터링)
-  const fetchMetadata = async (storeId: string) => {
+  // 3. 카테고리 목록 가져오기
+  const fetchMetadata = async () => {
+    if (!currentKioskId) return;
     try {
-      // 카테고리
-      const catRes = await fetch(`/category/store/${storeId}`, {
+      const catRes = await fetch(`/category/kiosk/${currentKioskId}`, {
         headers: { 
-          'Authorization': `Bearer ${token}`,
-          ...(currentKioskId ? { 'X-Kiosk-Id': currentKioskId } : {})
+          'Authorization': `Bearer ${token}`
         }
       });
       if (catRes.ok) {
         const catData = await catRes.json();
         setCategories(catData);
-      }
-      // 키오스크
-      const kioskRes = await fetch(`/kiosks/?store_id=${storeId}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (kioskRes.ok) {
-        const kioskData = await kioskRes.json();
-        setKdoubleKiosks(kioskData);
       }
     } catch (err) {
       console.error(err);
@@ -153,27 +133,20 @@ export default function ProductManagement() {
   };
 
   useEffect(() => {
-    fetchStores();
-  }, [token]);
+    fetchKioskDetail();
+  }, [token, currentKioskId]);
 
   useEffect(() => {
-    if (selectedStore) {
-      fetchProducts(selectedStore.id);
-      fetchMetadata(selectedStore.id);
+    if (currentKioskId) {
+      fetchProducts();
+      fetchMetadata();
     }
-  }, [selectedStore, searchName, filterActive, currentKioskId]);
+  }, [currentKioskId, searchName, filterActive]);
 
   // 카테고리 ID -> 카테고리명
   const getCategoryName = (catId: number) => {
     const found = categories.find(c => c.id === catId);
     return found ? found.name : `분류없음 (${catId})`;
-  };
-
-  // 키오스크 ID -> 키오스크명
-  const getKioskName = (kId: string | null) => {
-    if (!kId) return '전체 기기';
-    const found = kdoubleKiosks.find(k => k.id === kId);
-    return found ? found.name : '기기 귀속';
   };
 
   // 상품 노출 순서 이동 (UP/DOWN)
@@ -187,7 +160,7 @@ export default function ProductManagement() {
         const data = await res.json();
         throw new Error(data.detail || '순서 조정 실패');
       }
-      if (selectedStore) fetchProducts(selectedStore.id);
+      fetchProducts();
     } catch (err: any) {
       alert(err.message);
     }
@@ -205,7 +178,7 @@ export default function ProductManagement() {
         throw new Error(data.detail || '복사 실패');
       }
       alert('상품 복사가 완료되었습니다.');
-      if (selectedStore) fetchProducts(selectedStore.id);
+      fetchProducts();
     } catch (err: any) {
       alert(err.message);
     }
@@ -215,13 +188,13 @@ export default function ProductManagement() {
   const handleDeleteProduct = async (productId: string, name: string) => {
     if (!window.confirm(`정말로 상품 [${name}]을 삭제하시겠습니까?`)) return;
     try {
-      const res = await fetch(`/products/store/${selectedStore?.id}/product/${productId}`, {
+      const res = await fetch(`/products/kiosk/${currentKioskId}/product/${productId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) throw new Error('삭제에 실패했습니다.');
       alert('상품이 성공적으로 삭제되었습니다.');
-      if (selectedStore) fetchProducts(selectedStore.id);
+      fetchProducts();
     } catch (err: any) {
       alert(err.message);
     }
@@ -265,7 +238,7 @@ export default function ProductManagement() {
       
       alert(data.message);
       setSelectedIds([]);
-      if (selectedStore) fetchProducts(selectedStore.id);
+      fetchProducts();
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -293,7 +266,7 @@ export default function ProductManagement() {
       
       alert('선택한 상품이 모두 삭제되었습니다.');
       setSelectedIds([]);
-      if (selectedStore) fetchProducts(selectedStore.id);
+      fetchProducts();
     } catch (err: any) {
       alert(err.message);
     } finally {
@@ -304,7 +277,7 @@ export default function ProductManagement() {
   // 상태 토글 (is_active 개별 토글)
   const handleToggleActive = async (product: ProductItem) => {
     try {
-      const res = await fetch(`/products/store/${selectedStore?.id}/product/${product.id}`, {
+      const res = await fetch(`/products/kiosk/${currentKioskId}/product/${product.id}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -315,13 +288,13 @@ export default function ProductManagement() {
         })
       });
       if (!res.ok) throw new Error('상태 토글 실패');
-      if (selectedStore) fetchProducts(selectedStore.id);
+      fetchProducts();
     } catch (err: any) {
       alert(err.message);
     }
   };
 
-  if (isLoadingStores) {
+  if (isLoadingKiosk) {
     return (
       <div className="flex-grow p-8 flex justify-center items-center h-full">
         <Loader2 className="animate-spin text-[#7C3AED]" size={48} />
@@ -340,34 +313,28 @@ export default function ProductManagement() {
     );
   }
 
+  if (!currentKioskId) {
+    return (
+      <div className="flex-grow p-8 flex flex-col justify-center items-center h-[60vh] text-center space-y-4">
+        <AlertTriangle size={48} className="text-yellow-500 animate-bounce" />
+        <h3 className="text-xl font-bold text-gray-800">관리 대상 키오스크 미선택</h3>
+        <p className="text-gray-500 max-w-md">상품 관리를 시작하려면 좌측 하단의 키오스크 선택기 또는 기기 관리 메뉴에서 관리 대상을 먼저 선택해 주세요.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-6">
       {/* 헤더 */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-1">상품 및 메뉴 관리</h1>
-          <p className="text-gray-500 text-base">가맹 매장에 등록된 상품을 추가하고 재고 및 노출 순서를 제어합니다.</p>
+          <p className="text-gray-500 text-base">
+            현재 관리 기기: <span className="font-bold text-[#7C3AED]">{currentKiosk?.name || '키오스크'}</span> ({currentKiosk?.store_name || '매장'})
+          </p>
         </div>
 
         <div className="flex space-x-3 w-full md:w-auto">
-          {/* 매장 선택 드롭다운 */}
-          {stores.length > 0 && (
-            <div className="flex items-center space-x-3 bg-white border border-gray-200 px-4 py-2 rounded-xl shadow-sm">
-              <span className="text-sm font-bold text-gray-500">매장 선택:</span>
-              <select
-                value={selectedStore?.id || ''}
-                onChange={(e) => {
-                  const store = stores.find(s => s.id === e.target.value);
-                  if (store) setSelectedStore(store);
-                }}
-                className="outline-none bg-white font-bold text-gray-800 text-base cursor-pointer"
-              >
-                {stores.map(store => (
-                  <option key={store.id} value={store.id}>{store.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
           {/* 카테고리 관리 */}
           <button
             onClick={() => setIsCategoryModalOpen(true)}
@@ -467,9 +434,8 @@ export default function ProductManagement() {
                   <th className="px-6 py-4 w-20">이미지</th>
                   <th className="px-6 py-4">상품명</th>
                   <th className="px-6 py-4">카테고리</th>
-                  <th className="px-6 py-4">귀속 기기</th>
                   <th className="px-6 py-4">판매가</th>
-                  {selectedStore?.type !== 'Restaurant' && <th className="px-6 py-4">바코드</th>}
+                  {currentKiosk?.type !== 'Restaurant' && <th className="px-6 py-4">바코드</th>}
                   <th className="px-6 py-4">재고현황</th>
                   <th className="px-6 py-4 text-center">순서</th>
                   <th className="px-6 py-4">상태</th>
@@ -479,8 +445,8 @@ export default function ProductManagement() {
               <tbody className="divide-y divide-gray-100 text-gray-700">
                 {products.length === 0 ? (
                   <tr>
-                    <td colSpan={selectedStore?.type === 'Restaurant' ? 11 : 12} className="text-center py-16 text-gray-400 font-medium">
-                      해당 조건에 만족하는 상품이 매장에 등록되어 있지 않습니다.
+                    <td colSpan={currentKiosk?.type === 'Restaurant' ? 10 : 11} className="text-center py-16 text-gray-400 font-medium">
+                      등록된 상품이 존재하지 않습니다.
                     </td>
                   </tr>
                 ) : (
@@ -525,21 +491,17 @@ export default function ProductManagement() {
                         <td className="px-6 py-4 font-bold text-sm text-gray-800">
                           {getCategoryName(product.category_id)}
                         </td>
-                        {/* 6. 귀속기기 */}
-                        <td className="px-6 py-4 text-sm text-gray-600 font-semibold">
-                          {getKioskName(product.kiosk_id)}
-                        </td>
-                        {/* 7. 판매가 */}
+                        {/* 6. 판매가 */}
                         <td className="px-6 py-4 font-extrabold text-gray-900 text-sm">
                           ₩{product.price.toLocaleString()}
                         </td>
-                        {/* 8. 바코드 (외식형 아닐때만 노출) */}
-                        {selectedStore?.type !== 'Restaurant' && (
+                        {/* 7. 바코드 (외식형 아닐때만 노출) */}
+                        {currentKiosk?.type !== 'Restaurant' && (
                           <td className="px-6 py-4 font-mono text-xs text-gray-500 font-bold">
                             {product.barcode || '-'}
                           </td>
                         )}
-                        {/* 9. 재고현황 */}
+                        {/* 8. 재고현황 */}
                         <td className="px-6 py-4">
                           {product.stock_managed ? (
                             <div className="flex items-center space-x-1.5">
@@ -556,7 +518,7 @@ export default function ProductManagement() {
                             </span>
                           )}
                         </td>
-                        {/* 10. 순서 이동 버튼 */}
+                        {/* 9. 순서 이동 버튼 */}
                         <td className="px-6 py-4">
                           <div className="flex flex-col items-center justify-center space-y-1">
                             <button
@@ -575,7 +537,7 @@ export default function ProductManagement() {
                             </button>
                           </div>
                         </td>
-                        {/* 11. 상태 활성 토글 */}
+                        {/* 10. 상태 활성 토글 */}
                         <td className="px-6 py-4">
                           <button
                             onClick={() => handleToggleActive(product)}
@@ -590,7 +552,7 @@ export default function ProductManagement() {
                             />
                           </button>
                         </td>
-                        {/* 12. 작업 버튼들 */}
+                        {/* 11. 작업 버튼들 */}
                         <td className="px-6 py-4 text-center">
                           <div className="flex items-center justify-center space-x-1">
                             {/* 수정 */}
@@ -636,9 +598,9 @@ export default function ProductManagement() {
       <CategoryManageModal
         isOpen={isCategoryModalOpen}
         onClose={() => setIsCategoryModalOpen(false)}
-        storeId={selectedStore?.id || ''}
+        kioskId={currentKioskId || ''}
         token={token || ''}
-        onCategoriesUpdated={() => selectedStore && fetchMetadata(selectedStore.id)}
+        onCategoriesUpdated={() => fetchMetadata()}
       />
 
       {/* 상품 등록 및 수정 팝업 */}
@@ -648,11 +610,11 @@ export default function ProductManagement() {
           setIsProductModalOpen(false);
           setProductToEdit(null);
         }}
-        storeId={selectedStore?.id || ''}
-        storeType={selectedStore?.type || 'Store'}
+        kioskId={currentKioskId || ''}
+        kioskType={currentKiosk?.type || 'Store'}
         token={token || ''}
         productToEdit={productToEdit}
-        onSaveSuccess={() => selectedStore && fetchProducts(selectedStore.id)}
+        onSaveSuccess={() => fetchProducts()}
       />
     </div>
   );

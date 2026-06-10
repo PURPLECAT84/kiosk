@@ -13,8 +13,11 @@
 
 - `[ ]` 외식형(Type B) 다중 출력 트랜잭션 로직 설계 (알림톡 API vs 프린터 통신 분기)
 - `[ ]` 네트워크 장애 대비 Local Storage 상태 동기화 API 구축
-- [x] 기존 백엔드 코드 전반적 다듬기 (최신 문법 적용, 코드 리뷰 및 리팩토링)
-  - _완료 (2026-04-29): database.py 세션 통합, main.py 정돈 및 멘토링 주석 보강 완료. 모델/라우터 2.0 스펙 점검 완료._
+- [x] (20260610-1) Store(매장) 테이블 및 관련 라우터/스키마 영구 삭제
+- [x] (20260610-1) Kiosk, Shelve, Category, Product, Order 모델을 kiosk_id에 직접 귀속되도록 다대일 관계 리팩토링
+- [x] (20260610-1) `/order` 조회 API, `/kiosks/active-stores` API 등에서 store_id 의존성 제거 및 kiosk_id 및 user_id 매개변수 기반 고도화
+- [x] (20260610-1) 초기 데이터 시딩 스크립트(seeder.py)에서 더미 점주(dummy1@moki.com)에 대한 BusinessInfo(매장명: 모키반점) 적재 및 사업자 최종 활성화(is_business_verified=True) 강제 설정
+- [x] (20260610-1) 상품 모델에서 불필요한 거래처/원산지(buy_from) 필드 및 스키마 속성 완전 제거
 - [x] (20260508-1) Vite Proxy 지원을 위한 소셜 로그인 Redirect URI 경로 변경 (`/auth/callback` -> `/callback`)
 - [x] (20260508-1) 소셜 계정 최초 연동 시 `user_info` 테이블의 `password` 필드 Not Null 제약조건 예외처리 완료 (`SOCIAL_LOGIN` 더미 암호 삽입)
 - [x] (20260508-2) JWT 토큰에 `provider` 클레임 추가 (이메일/카카오/구글 구분)
