@@ -5,12 +5,25 @@ import httpx
 import uuid
 import base64
 from datetime import datetime
+import logging
+import asyncio
 
 from models.order import Order
 from models.order_item import OrderItem
 from models.product import Product
 from schemas.order import OrderCreate
 from core.security import TOSS_SECRET_KEY
+
+logger = logging.getLogger("alimtalk_service")
+
+async def send_order_complete_notification(phone: str, total_amount: int) -> bool:
+    """
+    [포트원/알리고 알림톡 모의 발송]
+    실제 가맹 연동 시에는 비즈니스 카카오 알림톡 API를 호출합니다.
+    현재는 테스트 샌드박스 상태이므로 성공 로그를 남깁니다.
+    """
+    logger.info(f"카카오 알림톡 전송 완료 -> 수신번호: {phone}, 내용: [MOKI] 주문이 접수되었습니다. 결제금액: {total_amount}원")
+    return True
 
 async def create_order_transaction(db: Session, order_data: OrderCreate) -> Order:
     """
@@ -56,6 +69,7 @@ async def create_order_transaction(db: Session, order_data: OrderCreate) -> Orde
             order_no = current_date + random_digits
 
         # [2단계] 영수증(Order) 뼈대 만들기
+        initial_status = "Preparing" if kiosk.type == "Restaurant" else "Completed"
         new_order = Order(
             order_no=order_no,
             kiosk_id=order_data.kiosk_id,
@@ -63,6 +77,7 @@ async def create_order_transaction(db: Session, order_data: OrderCreate) -> Orde
             payment_method=order_data.payment_method,
             payment_provider=order_data.payment_provider,
             approval_code=order_data.approval_code,
+            status=initial_status,
         )
         db.add(new_order)
         # 🔥 commit() 대신 flush()를 씁니다!
@@ -109,6 +124,11 @@ async def create_order_transaction(db: Session, order_data: OrderCreate) -> Orde
         # 4단계: 영수증과 장바구니를 한 번에 도장 쾅! (에러 없으면 최종 확정)
         db.commit()
         db.refresh(new_order)
+
+        # 5단계: 주문 완료 카카오 알림톡 발송 (휴대폰 번호가 입력된 경우)
+        if new_order.order_no and new_order.order_no.startswith("010") and len(new_order.order_no) in [10, 11]:
+            asyncio.create_task(send_order_complete_notification(new_order.order_no, new_order.total_amount))
+
         return new_order
 
     except Exception as e:

@@ -39,3 +39,7 @@ class OrderRefundRequest(BaseModel):
     refund_reason: str
     refund_method: str
 
+
+class OrderStatusUpdate(BaseModel):
+    status: str
+

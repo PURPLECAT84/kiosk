@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -94,6 +95,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
 
   // 대문화면 여부 및 타이머 상태
   bool _isStarted = false;
+  bool _isPaymentRequired = false;
   Timer? _inactivityTimer;
 
   // 디바이스 온보딩(매핑) 관련 로컬 상태 변수들
@@ -104,12 +106,31 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
   String _onboardingError = "";
   int _adminTapCount = 0;
 
+  // 하드웨어 연동 어댑터 인스턴스 (3.2 & 3.3)
+  final CardTerminalAdapter _cardTerminal = MockCardTerminal();
+  final ReceiptPrinterAdapter _printer = MockESCPOSTransmit();
+
+  // USB HID 바코드 스캐너 입력 리스너 (3.1)
+  final FocusNode _barcodeFocusNode = FocusNode();
+  String _barcodeBuffer = "";
+
   @override
   void initState() {
     super.initState();
     _updateTime();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (timer) => _updateTime());
     _loadLocalKioskId(); // 최초 시작 시 로컬 kiosk_id 감지
+
+    // 바코드 스캐너 포커스 감지 리스너 (포커스 이탈 방지)
+    _barcodeFocusNode.addListener(() {
+      if (!_barcodeFocusNode.hasFocus && _isStarted) {
+        Future.delayed(const Duration(seconds: 1), () {
+          if (mounted && _isStarted) {
+            _barcodeFocusNode.requestFocus();
+          }
+        });
+      }
+    });
   }
 
   @override
@@ -117,6 +138,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
     _clockTimer.cancel();
     _inactivityTimer?.cancel();
     _kioskIdController.dispose();
+    _barcodeFocusNode.dispose();
     super.dispose();
   }
 
@@ -188,6 +210,12 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
           _storeName = syncData['store_name'];
           _categories = syncData['categories'];
           _kioskType = syncData['kiosk_type'] ?? 'Restaurant';
+          _isPaymentRequired = false;
+          _isLoading = false;
+        });
+      } else if (syncRes.statusCode == 402) {
+        setState(() {
+          _isPaymentRequired = true;
           _isLoading = false;
         });
       } else if (syncRes.statusCode == 404) {
@@ -197,6 +225,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
         setState(() {
           _kioskId = null;
           _isStarted = false;
+          _isPaymentRequired = false;
           _isLoading = false;
         });
       } else {
@@ -269,6 +298,43 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
     });
   }
 
+  // 바코드 스캔 처리 로직 (3.1)
+  void _processBarcode(String barcode) {
+    final cleanBarcode = barcode.trim();
+    if (cleanBarcode.isEmpty) return;
+
+    dynamic matchedProduct;
+    for (var cat in _categories) {
+      final products = cat['products'] ?? [];
+      for (var prod in products) {
+        if (prod['barcode'] != null && prod['barcode'].toString().trim() == cleanBarcode) {
+          matchedProduct = prod;
+          break;
+        }
+      }
+      if (matchedProduct != null) break;
+    }
+
+    if (matchedProduct != null) {
+      _addToCart(matchedProduct);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("바코드 인식: [${matchedProduct['name']}] 장바구니 추가"),
+          backgroundColor: const Color(0xff7C3AED),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("알 수 없는 바코드: $cleanBarcode"),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   // 수량 가감
   void _updateCartItemQuantity(int index, int delta) {
     setState(() {
@@ -333,51 +399,81 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
   }
 
   // 가상 결제 로딩 애니메이션 및 Mock API 호출
-  void _runVirtualPaymentProcess(String? phoneNumber) {
+  void _runVirtualPaymentProcess(String? phoneNumber) async {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => const VirtualCardPaymentDialog(),
     );
 
-    // 3초간 가상 카드 로딩 애니메이션 연출 후 결제 API 호출
-    Timer(const Duration(seconds: 3), () async {
-      Navigator.of(context).pop(); // 결제 진행 모달 닫기
+    try {
+      // 1. 실물 카드 단말기 연동 어댑터 호출 (3.2)
+      final terminalResult = await _cardTerminal.requestPayment(_getCartTotal());
       
-      try {
-        // Mock 결제 페이로드 빌드
-        final List<Map<String, dynamic>> itemsPayload = _cart.map((item) => {
-          "product_id": item.productId,
-          "quantity": item.quantity,
-        }).toList();
+      if (terminalResult['status'] != 'SUCCESS') {
+        Navigator.of(context).pop(); // 결제 진행 모달 닫기
+        _showAlertDialog("결제 실패", terminalResult['message'] ?? "단말기 결제 승인 실패");
+        return;
+      }
 
-        final res = await http.post(
-          Uri.parse('$backendUrl/kiosk_client/pay/mock'),
-          headers: {"Content-Type": "application/json"},
-          body: json.encode({
-            "kiosk_id": _kioskId,
-            "total_amount": _getCartTotal(),
-            "payment_method": "카드",
-            "order_no": phoneNumber,
-            "items": itemsPayload
-          }),
+      final String terminalApprovalCode = terminalResult['approvalCode']!;
+
+      // Mock 결제 페이로드 빌드
+      final List<Map<String, dynamic>> itemsPayload = _cart.map((item) => {
+        "product_id": item.productId,
+        "quantity": item.quantity,
+      }).toList();
+
+      final res = await http.post(
+        Uri.parse('$backendUrl/kiosk_client/pay/mock'),
+        headers: {"Content-Type": "application/json"},
+        body: json.encode({
+          "kiosk_id": _kioskId,
+          "total_amount": _getCartTotal(),
+          "payment_method": "카드",
+          "order_no": phoneNumber,
+          "items": itemsPayload
+        }),
+      );
+
+      Navigator.of(context).pop(); // 결제 진행 모달 닫기
+
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        
+        // 2. 결제 성공 시 모의 프린터로 영수증 출력 실행 (3.3)
+        await _printer.printReceipt(
+          storeName: _storeName,
+          orderNo: data['order_no'],
+          approvalCode: terminalApprovalCode,
+          items: _cart,
+          totalAmount: _getCartTotal(),
         );
 
-        if (res.statusCode == 200) {
-          final data = json.decode(res.body);
-          _showPaymentSuccessDialog(data['order_no'], data['approval_code']);
-        } else {
-          final errorData = json.decode(res.body);
-          _showAlertDialog("결제 실패", errorData['detail'] ?? "결제 처리 중 서버 에러가 발생했습니다.");
-        }
-      } catch (e) {
-        // 백엔드 연결 불가 시에도 강제 가상 결제 성공 처리 (Kiosk UX 보장)
-        final String formattedDate = DateFormat('yyMMdd').format(DateTime.now());
-        final String approvalCode = formattedDate + "123456";
-        final String orderNo = phoneNumber ?? (formattedDate + "654321");
-        _showPaymentSuccessDialog(orderNo, approvalCode);
+        _showPaymentSuccessDialog(data['order_no'], terminalApprovalCode);
+      } else {
+        final errorData = json.decode(res.body);
+        _showAlertDialog("결제 실패", errorData['detail'] ?? "결제 처리 중 서버 에러가 발생했습니다.");
       }
-    });
+    } catch (e) {
+      Navigator.of(context).pop(); // 결제 진행 모달 닫기
+      
+      // 백엔드 연결 불가 시에도 강제 가상 결제 성공 처리 (Kiosk UX 보장)
+      final String formattedDate = DateFormat('yyMMdd').format(DateTime.now());
+      final String approvalCode = "AP" + formattedDate + "123456";
+      final String orderNo = phoneNumber ?? (formattedDate + "654321");
+      
+      // 오프라인 상태에서도 영수증 인쇄 연동 진행
+      await _printer.printReceipt(
+        storeName: _storeName,
+        orderNo: orderNo,
+        approvalCode: approvalCode,
+        items: _cart,
+        totalAmount: _getCartTotal(),
+      );
+      
+      _showPaymentSuccessDialog(orderNo, approvalCode);
+    }
   }
 
   // 결제 완료 안내 다이얼로그
@@ -462,22 +558,121 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
       );
     }
 
+    if (_isPaymentRequired) {
+      return Scaffold(
+        backgroundColor: const Color(0xffF3F4F6),
+        body: Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 500),
+            padding: const EdgeInsets.all(40.0),
+            margin: const EdgeInsets.symmetric(horizontal: 24.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24.0),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                )
+              ]
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: const Color(0xff7C3AED).withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.lock_clock_outlined,
+                    color: Color(0xff7C3AED),
+                    size: 40,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  "사용료 결제대기 / 정지 상태",
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xff111827)),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  "기기 사용료 정기결제가 연체되었거나 카드가 등록되지 않아 기기 사용이 일시 중지되었습니다.\n\n파트너센터(관리자 페이지)에서 결제 수단을 등록 또는 갱신해 주시기 바랍니다.",
+                  style: TextStyle(fontSize: 16, color: Color(0xff4B5563), height: 1.5),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton(
+                  onPressed: () {
+                    _syncKioskData();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xff7C3AED),
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14.0),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.refresh, color: Colors.white),
+                      SizedBox(width: 8),
+                      Text(
+                        "결제 상태 재확인 (새로고침)",
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     if (!_isStarted) {
       return Scaffold(
         body: _buildWelcomeScreen(),
       );
     }
 
-    return Scaffold(
-      backgroundColor: const Color(0xffF3F4F6),
-      body: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: () {
-          _resetInactivityTimer();
-        },
-        child: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, constraints) {
+    return Focus(
+      focusNode: _barcodeFocusNode,
+      autofocus: true,
+      onKeyEvent: (FocusNode node, KeyEvent event) {
+        if (event is KeyDownEvent) {
+          if (event.logicalKey == LogicalKeyboardKey.enter) {
+            _processBarcode(_barcodeBuffer);
+            _barcodeBuffer = "";
+            return KeyEventResult.handled;
+          } else {
+            final character = event.character;
+            if (character != null && character.isNotEmpty) {
+              _barcodeBuffer += character;
+            }
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xffF3F4F6),
+        body: GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () {
+            _resetInactivityTimer();
+          },
+          child: SafeArea(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
             // FHD 세로형 규격(1080x1920) 타겟팅 비율 기반 동적 레이아웃 분할
             final double screenHeight = constraints.maxHeight;
             final double headerHeight = screenHeight * 0.15;
@@ -865,6 +1060,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
           },
         ),
       ),
+     ),
     ),
   );
 }
@@ -878,6 +1074,7 @@ Widget _buildWelcomeScreen() {
         _selectedCategoryIndex = 0; // 진입 시 항상 '전체상품' 기본 선택
       });
       _resetInactivityTimer();
+      _barcodeFocusNode.requestFocus();
     },
     child: Container(
       decoration: const BoxDecoration(
@@ -1467,4 +1664,78 @@ class _PhoneInputBottomSheetState extends State<PhoneInputBottomSheet> {
     );
   }
 }
+
+// -----------------------------------------------------------------------------
+// [3.2] 포트원 오프라인 결제 단말기 연동 규격 설계 및 가상 승인 연동
+// -----------------------------------------------------------------------------
+abstract class CardTerminalAdapter {
+  Future<Map<String, String>> requestPayment(int amount);
+  Future<bool> requestCancel(String approvalCode, int amount);
+}
+
+class MockCardTerminal implements CardTerminalAdapter {
+  @override
+  Future<Map<String, String>> requestPayment(int amount) async {
+    // 실물 단말기 포트 통신 규격 모의 지연 (2초)
+    await Future.delayed(const Duration(seconds: 2));
+    final String approvalCode = "AP${DateTime.now().millisecondsSinceEpoch.toString().substring(5)}";
+    final String cardNo = "9400-****-****-1234";
+    return {
+      "status": "SUCCESS",
+      "approvalCode": approvalCode,
+      "cardNo": cardNo,
+      "message": "카드 승인 성공"
+    };
+  }
+
+  @override
+  Future<bool> requestCancel(String approvalCode, int amount) async {
+    await Future.delayed(const Duration(seconds: 1));
+    return true;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// [3.3] ESC/POS 프린터 통신 추상화 클래스 설계 및 결제 성공 시 영수증 인쇄 연동
+// -----------------------------------------------------------------------------
+abstract class ReceiptPrinterAdapter {
+  Future<bool> printReceipt({
+    required String storeName,
+    required String orderNo,
+    required String approvalCode,
+    required List<CartItem> items,
+    required int totalAmount,
+  });
+}
+
+class MockESCPOSTransmit implements ReceiptPrinterAdapter {
+  @override
+  Future<bool> printReceipt({
+    required String storeName,
+    required String orderNo,
+    required String approvalCode,
+    required List<CartItem> items,
+    required int totalAmount,
+  }) async {
+    final buffer = StringBuffer();
+    buffer.writeln("\n======= [영수증 출력 (ESC/POS)] =======");
+    buffer.writeln("가맹점: $storeName");
+    buffer.writeln("주문번호: $orderNo");
+    buffer.writeln("승인번호: $approvalCode");
+    buffer.writeln("일시: ${DateTime.now().toLocal()}");
+    buffer.writeln("-------------------------------------");
+    for (var item in items) {
+      final String line = "${item.name.padRight(12)} ${item.quantity}개  ₩${(item.price * item.quantity).toString()}";
+      buffer.writeln(line);
+    }
+    buffer.writeln("-------------------------------------");
+    buffer.writeln("합계 금액: ₩${totalAmount.toString()}");
+    buffer.writeln("=====================================\n");
+    
+    // 개발 콘솔창에 인쇄 내용 출력
+    print(buffer.toString());
+    return true;
+  }
+}
+
 

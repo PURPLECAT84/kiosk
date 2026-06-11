@@ -85,4 +85,50 @@ with engine.connect() as conn:
         else:
             print("Error adding 'kiosk_id':", e)
 
+    # 7. user_info 테이블에 본인인증 컬럼 추가
+    try:
+        conn.execute(text("ALTER TABLE user_info ADD COLUMN is_identity_verified BOOLEAN DEFAULT FALSE;"))
+        conn.commit()
+        print("Added 'is_identity_verified' column to 'user_info' table.")
+    except Exception as e:
+        conn.rollback()
+        if "already exists" in str(e):
+            print("'is_identity_verified' column already exists.")
+        else:
+            print("Error adding 'is_identity_verified':", e)
+
+    try:
+        conn.execute(text("ALTER TABLE user_info ADD COLUMN ci VARCHAR(100) UNIQUE;"))
+        conn.commit()
+        print("Added 'ci' column to 'user_info' table.")
+    except Exception as e:
+        conn.rollback()
+        if "already exists" in str(e):
+            print("'ci' column already exists.")
+        else:
+            print("Error adding 'ci':", e)
+
+    try:
+        conn.execute(text("ALTER TABLE user_info ADD COLUMN di VARCHAR(100);"))
+        conn.commit()
+        print("Added 'di' column to 'user_info' table.")
+    except Exception as e:
+        conn.rollback()
+        if "already exists" in str(e):
+            print("'di' column already exists.")
+        else:
+            print("Error adding 'di':", e)
+
+    # 8. kiosks 테이블에 billing_key 컬럼 추가
+    try:
+        conn.execute(text("ALTER TABLE kiosks ADD COLUMN billing_key VARCHAR(255);"))
+        conn.commit()
+        print("Added 'billing_key' column to 'kiosks' table.")
+    except Exception as e:
+        conn.rollback()
+        if "already exists" in str(e):
+            print("'billing_key' column already exists in 'kiosks'.")
+        else:
+            print("Error adding 'billing_key':", e)
+
 print("DB patching complete.")

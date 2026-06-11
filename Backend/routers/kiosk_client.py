@@ -36,6 +36,13 @@ async def sync_kiosk(
     if not kiosk:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="등록되지 않은 키오스크 기기입니다")
     
+    # 1-2. 사용료 결제 상태 검증 (연체 미납 시 차단)
+    if kiosk.payment_status == "UNPAID":
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="사용료 연체로 인해 키오스크 사용이 중지되었습니다. 파트너센터에서 결제 정보를 확인해주세요."
+        )
+    
     # 2. 점주 사업자명(매장명) 조회
     store_name = "미지정 매장"
     if kiosk.owner and kiosk.owner.businesses:

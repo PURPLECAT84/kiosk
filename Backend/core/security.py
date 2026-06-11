@@ -13,6 +13,11 @@ import jwt
 # 토스페이먼츠 시크릿 키
 TOSS_SECRET_KEY = os.getenv("TOSS_SECRET_KEY")
 
+# 포트원 V2 API 설정 (추가)
+PORTONE_API_SECRET = os.getenv("PORTONE_API_SECRET", "test_portone_secret")
+PORTONE_CHANNEL_KEY = os.getenv("PORTONE_CHANNEL_KEY", "test_channel_key")
+PORTONE_API_URL = "https://api.portone.io"
+
 """===================== 해싱(암호화) 코드 [최신 pwdlib 적용] ============================"""
 # 최신 FastAPI 표준 암호화 방식입니다.
 password_hash = PasswordHash((BcryptHasher(),))

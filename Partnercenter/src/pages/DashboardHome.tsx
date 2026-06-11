@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useKiosk } from '../context/KioskContext';
 import { Monitor, LayoutDashboard, Loader2, ArrowRight, RefreshCw, CreditCard, Receipt, TrendingUp, BarChart3 } from 'lucide-react';
+import SettlementCalendar from '../components/SettlementCalendar';
 
 interface KioskItem {
   id: string;
@@ -223,6 +224,11 @@ export default function DashboardHome() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* 월간 정산 달력 섹션 */}
+      {user?.role !== 'STAFF' && (
+        <SettlementCalendar />
       )}
 
       {/* 내 키오스크 목록 섹션 */}

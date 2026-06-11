@@ -24,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from database import engine, Base
-from routers import user, kiosk, kiosk_client, shelve, category, product, order, statistics, social_login
+from routers import user, kiosk, kiosk_client, shelve, category, product, order, statistics, social_login, identity_verification, payment_subscription
 
 # 1. DB 테이블 자동 생성
 # 앱이 시작될 때 models에 정의된 스키마를 바탕으로 DB에 테이블이 없으면 자동으로 생성해줍니다.
@@ -47,6 +47,10 @@ os.makedirs("static/images", exist_ok=True)
 
 # 3. FastAPI 앱 인스턴스 생성
 app = FastAPI(title="Kiosk Admin Center", description="키오스크 관리자 페이지 및 백엔드 API", version="1.0.0") 
+
+# 3-2. 정기결제 백그라운드 스케줄러 가동
+from core.scheduler import start_scheduler
+start_scheduler(app)
 
 # 4. CORS 미들웨어 설정
 # 프론트엔드(React, Flutter 등)에서 백엔드 API를 호출할 수 있도록 허용하는 보안 정책입니다.
@@ -82,6 +86,8 @@ app.include_router(product.router, prefix="/products", tags=["Products"])
 app.include_router(order.router, prefix="/order", tags=["Orders"])
 app.include_router(statistics.router, prefix="/dashboard", tags=["Dashboard"])
 app.include_router(social_login.auth_router) # prefix와 tags는 라우터 내부에서 정의됨
+app.include_router(identity_verification.router)
+app.include_router(payment_subscription.router)
 
 # 7. 루트 경로 처리 (프론트엔드 HTML 반환)
 @app.get("/")

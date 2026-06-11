@@ -37,6 +37,9 @@ class UserInfo(Base):
     name: Mapped[str] = mapped_column(String(50), nullable=False) #이름
     phone: Mapped[str] = mapped_column(String(20)) #전화번호
     is_business_verified: Mapped[bool] = mapped_column(Boolean, default=False) #사업자 확인여부
+    is_identity_verified: Mapped[bool] = mapped_column(Boolean, default=False) #본인 확인여부
+    ci: Mapped[Optional[str]] = mapped_column(String(100), unique=True, nullable=True) #본인확인 고유값 (CI)
+    di: Mapped[Optional[str]] = mapped_column(String(100), nullable=True) #중복가입 확인값 (DI)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=text("now()")
     )#가입일,서버시간에 맞춤

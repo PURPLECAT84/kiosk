@@ -6,12 +6,49 @@ from sqlalchemy.sql import exists
 import uuid
 from typing import List, Optional
 from datetime import datetime, time
+import logging
+import httpx
+from core.security import PORTONE_API_SECRET, PORTONE_API_URL
+
+logger = logging.getLogger("portone_refund")
+
+async def request_portone_refund(approval_code: str, amount: int, reason: str) -> bool:
+    """
+    [포트원 결제 취소/환불 연동]
+    실제 연동 시에는 포트원 결제 취소 REST API를 호출합니다.
+    테스트 모드일 경우 모의 승인 완료 처리하고 로그를 기록합니다.
+    """
+    if PORTONE_API_SECRET and PORTONE_API_SECRET != "test_portone_secret":
+        url = f"{PORTONE_API_URL}/payments/{approval_code}/cancel"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"PortOne {PORTONE_API_SECRET}"
+        }
+        payload = {
+            "reason": reason,
+            "amount": amount
+        }
+        try:
+            async with httpx.AsyncClient() as client:
+                res = await client.post(url, headers=headers, json=payload, timeout=10.0)
+            if res.status_code == 200:
+                logger.info(f"포트원 V2 결제 취소 완료: 승인번호={approval_code}, 취소금액={amount}원")
+                return True
+            else:
+                logger.error(f"포트원 V2 결제 취소 실패: {res.text}")
+                return False
+        except Exception as e:
+            logger.error(f"포트원 V2 결제 취소 연동 에러: {str(e)}")
+            return False
+    else:
+        logger.info(f"포트원 환불 요청 승인 완료(모킹): 승인번호={approval_code}, 취소금액={amount}원, 취소사유={reason}")
+        return True
 from models.product import Product
 from models.kiosk import Kiosk
 from database import get_db
 from models.order import Order
 from models.user import UserInfo, UserRole
-from schemas.order import OrderCreate, OrderResponse, OrderRefundRequest
+from schemas.order import OrderCreate, OrderResponse, OrderRefundRequest, OrderStatusUpdate
 
 from service.order_service import create_order_transaction
 from core.dependency import get_current_user
@@ -115,6 +152,9 @@ async def delete_orders(
     if current_user.role not in [UserRole.DEV, UserRole.HEAD, UserRole.MASTER] and order.kiosk.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="본인 키오스크의 주문만 환불 처리할 수 있습니다.")
     
+    # 0. 포트원 결제 취소 API 연동
+    await request_portone_refund(order.approval_code, order.total_amount, "점주 즉시 환불")
+
     # 1. 주문 상태 변경 및 기본 환불 정보 기록
     order.status = "REFUNDED"
     order.refund_amount = order.total_amount
@@ -153,6 +193,9 @@ async def refund_order(
     if current_user.role not in [UserRole.DEV, UserRole.HEAD, UserRole.MASTER] and order.kiosk.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="본인 키오스크의 주문만 환불 처리할 수 있습니다.")
     
+    # 0. 포트원 결제 취소 API 연동
+    await request_portone_refund(order.approval_code, refund_data.refund_amount, refund_data.refund_reason)
+
     # 1. 주문 상태 변경 및 환불 정보 기록
     order.status = "REFUNDED"
     order.refund_amount = refund_data.refund_amount
@@ -168,6 +211,28 @@ async def refund_order(
                 product.stock += item.quantity
             product.is_active = True 
 
+    db.commit()
+    db.refresh(order)
+    return order
+
+
+"""===================== 주문 상태 수정 ============================"""
+@router.patch("/{order_id}/status", response_model=OrderResponse)
+async def update_order_status(
+    order_id: int,
+    status_data: OrderStatusUpdate,
+    db: Session = Depends(get_db),
+    current_user: UserInfo = Depends(get_current_user)
+):
+    order = db.get(Order, order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="해당 주문 내역을 찾을 수 없습니다.")
+    
+    # 권한 체크
+    if current_user.role not in [UserRole.DEV, UserRole.HEAD, UserRole.MASTER] and order.kiosk.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="본인 키오스크의 주문만 수정할 수 있습니다.")
+        
+    order.status = status_data.status
     db.commit()
     db.refresh(order)
     return order

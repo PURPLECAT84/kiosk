@@ -9,10 +9,14 @@
 3. **상세한 주석:** 초보자도 원리를 이해할 수 있도록 코드에 상세한 주석과 설명을 포함합니다.
 4. **[특명] FASTAPI 학습가이드 제공:** 작성하는 모든 코드(라우터, 모델, 로직 등)에 기능의 목적, 주의점, 원리를 가독성 좋은 주석으로 기록하여, 코드 자체가 훌륭한 'FastAPI 학습 교과서'가 되도록 합니다. 기능 변경 시 주석도 반드시 업데이트합니다.
 
-## 📝 TODO List (V2.1 백로그)
+## 📝 TODO List (V2.2 백로그 - Phase 2)
 
-- `[ ]` 외식형(Type B) 다중 출력 트랜잭션 로직 설계 (알림톡 API vs 프린터 통신 분기)
-- `[ ]` 네트워크 장애 대비 Local Storage 상태 동기화 API 구축
+- `[ ]` 포트원 빌링키 발급 및 정기 사용료 예약 결제 스케줄러 개발
+- `[ ]` 키오스크 동기화 API(`/kiosk_client/sync`)에 사용료 결제 미납 차단 필터 적용
+- `[ ]` 포트원 본인인증(Certifications) API 연동 및 유저 테이블 본인인증 필드 추가
+- `[ ]` 네이버 소셜 로그인 연동 추가 (allowed_providers 리스트 확장)
+- `[ ]` 포트원 환불 API 연동 (`/payments/cancel`) 및 DB 주문 상태 연동
+- `[ ]` SMS/알림톡 API 연동 (Solapi / Aligo 등) 및 주문 접수/완료 훅 구현
 - [x] (20260610-1) Store(매장) 테이블 및 관련 라우터/스키마 영구 삭제
 - [x] (20260610-1) Kiosk, Shelve, Category, Product, Order 모델을 kiosk_id에 직접 귀속되도록 다대일 관계 리팩토링
 - [x] (20260610-1) `/order` 조회 API, `/kiosks/active-stores` API 등에서 store_id 의존성 제거 및 kiosk_id 및 user_id 매개변수 기반 고도화

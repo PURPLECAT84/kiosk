@@ -22,6 +22,7 @@ export interface User {
   login_provider?: string;
   phone?: string | null;
   is_business_verified?: boolean;
+  is_identity_verified?: boolean;
   businesses?: BusinessInfo[];
 }
 

@@ -106,18 +106,24 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-2 gap-4">
+          <div className="mt-6 grid grid-cols-3 gap-3">
             <a
               href="/auth/kakao/login"
-              className="flex justify-center items-center py-3 border border-gray-300 rounded-xl hover:bg-yellow-50 transition-colors text-lg font-medium text-gray-700"
+              className="flex justify-center items-center py-3 border border-gray-300 rounded-xl hover:bg-yellow-50 transition-colors text-base font-medium text-gray-700 text-center"
             >
-              카카오 로그인
+              카카오
+            </a>
+            <a
+              href="/auth/naver/login"
+              className="flex justify-center items-center py-3 border border-gray-300 rounded-xl hover:bg-green-50 transition-colors text-base font-medium text-gray-700 text-center"
+            >
+              네이버
             </a>
             <a
               href="/auth/google/login"
-              className="flex justify-center items-center py-3 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors text-lg font-medium text-gray-700"
+              className="flex justify-center items-center py-3 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors text-base font-medium text-gray-700 text-center"
             >
-              구글 로그인
+              구글
             </a>
           </div>
         </div>

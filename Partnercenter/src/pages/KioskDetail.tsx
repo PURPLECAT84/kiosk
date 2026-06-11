@@ -14,6 +14,7 @@ interface KioskItem {
   status: string;
   payment_status: string;
   next_payment_date: string | null;
+  billing_key: string | null;
   created_at: string;
 }
 
@@ -34,6 +35,59 @@ export default function KioskDetail() {
 
   // 삭제 진행 상태
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // 정기결제 진행 상태 및 핸들러
+  const [isSubscribing, setIsSubscribing] = useState(false);
+
+  const handleRegisterCard = async () => {
+    setIsSubscribing(true);
+    try {
+      const res = await fetch('/subscribe/billing-key', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          kiosk_id: id,
+          customer_uid: `customer_${user?.id}_${id}`
+        })
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || '정기결제 카드 연동에 실패했습니다.');
+      }
+      alert('사용료 결제 카드가 정상 등록되었으며 기기가 활성화되었습니다!');
+      fetchKioskData();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsSubscribing(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    if (!window.confirm('정기 결제를 해지하시겠습니까? 해지 즉시 기기 가동이 정지됩니다.')) return;
+    setIsSubscribing(true);
+    try {
+      const res = await fetch(`/subscribe/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || '정기결제 해지에 실패했습니다.');
+      }
+      alert('정기결제가 정상적으로 해지되었습니다.');
+      fetchKioskData();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsSubscribing(false);
+    }
+  };
 
   // 기기 관리자 목록 관련 상태
   const [admins, setAdmins] = useState<any[]>([]);
@@ -285,62 +339,53 @@ export default function KioskDetail() {
         </div>
       </div>
 
-      {/* 결제 정보 수정 카드 */}
+      {/* 결제 정보 수정 및 기기 정기 구독 카드 */}
       <div className="bg-white rounded-3xl p-8 shadow-sm border border-gray-100 space-y-6">
         <div>
           <h3 className="text-2xl font-bold text-gray-900 flex items-center">
-            <ShieldCheck className="mr-2 text-[#7C3AED]" size={26} /> 기기 라이선스 및 결제 상태 설정
+            <ShieldCheck className="mr-2 text-[#7C3AED]" size={26} /> {hasBillingEditAuth ? '기기 라이선스 및 결제 상태 설정 (본사 전용)' : '기기 라이선스 및 정기결제 관리'}
           </h3>
-          {!hasBillingEditAuth && (
-            <p className="text-red-500 text-sm font-semibold mt-1">
-              ⚠️ 해당 정보 변경 권한은 본사(HEAD) 또는 개발자(DEV) 권한 계정으로 로그인한 경우에만 편집할 수 있습니다. (현재 계정 권한: {user?.role})
-            </p>
-          )}
-          {hasBillingEditAuth && (
-            <p className="text-gray-500 text-sm mt-1">본사 권한으로 가맹 기기의 결제 체납 처리 및 라이선스 갱신일을 직접 수정할 수 있습니다.</p>
-          )}
+          <p className="text-gray-500 text-sm mt-1">
+            {hasBillingEditAuth 
+              ? '본사 권한으로 가맹 기기의 결제 체납 처리 및 라이선스 갱신일을 직접 수정할 수 있습니다.'
+              : '키오스크 서비스 월 가동 사용료 정기 구독 상태를 모니터링하고 카드를 등록/해지합니다.'}
+          </p>
         </div>
 
-        <form onSubmit={handleUpdateBilling} className="space-y-6 max-w-lg">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">결제 상태</label>
-            <select
-              value={paymentStatus}
-              onChange={(e) => setPaymentStatus(e.target.value)}
-              disabled={!hasBillingEditAuth}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none bg-white disabled:bg-gray-50 disabled:text-gray-400 font-semibold"
-            >
-              <option value="NORMAL">정상 납부 (NORMAL)</option>
-              <option value="UNPAID">체납 상태 (UNPAID)</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">다음 결제 예정일</label>
-            <div className="relative">
-              <input
-                type="date"
-                value={nextPaymentDate}
-                onChange={(e) => setNextPaymentDate(e.target.value)}
-                disabled={!hasBillingEditAuth}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none disabled:bg-gray-50 disabled:text-gray-400 font-semibold"
-              />
+        {hasBillingEditAuth ? (
+          <form onSubmit={handleUpdateBilling} className="space-y-6 max-w-lg">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">결제 상태</label>
+              <select
+                value={paymentStatus}
+                onChange={(e) => setPaymentStatus(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none bg-white font-semibold"
+              >
+                <option value="NORMAL">정상 납부 (NORMAL)</option>
+                <option value="UNPAID">체납 상태 (UNPAID)</option>
+              </select>
             </div>
-          </div>
 
-          {updateMsg.text && (
-            <p className={`text-sm font-semibold ${
-              updateMsg.type === 'error' 
-                ? 'text-red-500' 
-                : updateMsg.type === 'success' 
-                  ? 'text-green-500' 
-                  : 'text-blue-500'
-            }`}>
-              {updateMsg.text}
-            </p>
-          )}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">다음 결제 예정일</label>
+              <div className="relative">
+                <input
+                  type="date"
+                  value={nextPaymentDate}
+                  onChange={(e) => setNextPaymentDate(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none font-semibold"
+                />
+              </div>
+            </div>
 
-          {hasBillingEditAuth && (
+            {updateMsg.text && (
+              <p className={`text-sm font-semibold ${
+                updateMsg.type === 'error' ? 'text-red-500' : updateMsg.type === 'success' ? 'text-green-500' : 'text-blue-500'
+              }`}>
+                {updateMsg.text}
+              </p>
+            )}
+
             <button
               type="submit"
               disabled={isUpdating}
@@ -348,8 +393,62 @@ export default function KioskDetail() {
             >
               {isUpdating ? <Loader2 className="animate-spin" size={20} /> : '변경사항 저장하기'}
             </button>
-          )}
-        </form>
+          </form>
+        ) : (
+          <div className="space-y-6 max-w-lg">
+            {/* 구독 비용 안내 */}
+            <div className="bg-gray-50 border border-gray-100 rounded-2xl p-6 flex justify-between items-center">
+              <div>
+                <span className="text-gray-500 text-sm font-semibold block">기기당 가동 월 사용료</span>
+                <span className="text-2xl font-extrabold text-gray-900 mt-1 block">월 33,000 원 <span className="text-sm font-medium text-gray-400">(VAT 포함)</span></span>
+              </div>
+              <span className="bg-[#7C3AED]/10 text-[#7C3AED] text-xs font-bold px-3 py-1.5 rounded-full">자동결제 연동</span>
+            </div>
+
+            {/* 정기 결제 상태 카드 */}
+            {kiosk.billing_key ? (
+              <div className="bg-green-50 border border-green-100 rounded-2xl p-6 space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-green-800 font-bold text-base flex items-center">
+                    <span className="w-2.5 h-2.5 rounded-full bg-green-500 mr-2.5 animate-pulse" />
+                    정기결제 구독 활성화됨 (정상)
+                  </span>
+                  <span className="text-xs text-gray-400 font-mono select-all">{kiosk.billing_key.substring(0, 15)}...</span>
+                </div>
+                <div className="text-sm text-gray-600 space-y-1">
+                  <div>정기결제 정보: <span className="font-bold text-gray-900">등록 완료</span></div>
+                  <div>다음 결제 예정일: <span className="font-bold text-gray-900">{kiosk.next_payment_date ? new Date(kiosk.next_payment_date).toLocaleDateString() : '-'}</span></div>
+                </div>
+                <button
+                  onClick={handleCancelSubscription}
+                  disabled={isSubscribing}
+                  className="w-full bg-red-50 hover:bg-red-100/70 border border-red-200/50 text-red-600 font-bold py-3.5 rounded-xl transition-all cursor-pointer text-center text-sm"
+                >
+                  {isSubscribing ? <Loader2 className="animate-spin" size={20} /> : '정기결제 카드 해지 (기기 정지)'}
+                </button>
+              </div>
+            ) : (
+              <div className="bg-red-50 border border-red-100 rounded-2xl p-6 space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-red-800 font-bold text-base flex items-center">
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 mr-2.5" />
+                    사용료 결제대기 / 정지 상태
+                  </span>
+                </div>
+                <p className="text-xs text-red-500 font-medium">
+                  현재 카드가 등록되지 않았거나 요금이 미납 상태입니다. 기기 연동 및 상품 동기화를 활성화하려면 아래 버튼을 눌러 정기 결제 카드를 등록해주세요.
+                </p>
+                <button
+                  onClick={handleRegisterCard}
+                  disabled={isSubscribing}
+                  className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold py-3.5 rounded-xl transition-all flex justify-center items-center cursor-pointer shadow-sm text-sm"
+                >
+                  {isSubscribing ? <Loader2 className="animate-spin" size={20} /> : '정기결제 카드 등록 및 활성화'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* 👥 기기 관리자 리스트 카드 */}

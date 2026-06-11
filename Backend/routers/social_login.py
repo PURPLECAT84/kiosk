@@ -47,7 +47,7 @@ async def social_login(provider: str):
     이 API 주소로 접속하면, 해당 소셜 플랫폼(카카오/구글)의 로그인 창으로 자동 이동(리다이렉트) 시킵니다.
     """
     # 1. 올바른 소셜 로그인 플랫폼을 요청했는지 검사합니다.
-    allowed_providers = ["kakao", "google"]
+    allowed_providers = ["kakao", "google", "naver"]
     if provider not in allowed_providers:
         raise HTTPException(status_code=400, detail="현재 지원하지 않는 소셜 로그인 수단입니다.")
 

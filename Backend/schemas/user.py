@@ -89,6 +89,7 @@ class UserResponse(BaseModel):
     status : UserStatus # 상태 (PENDING, ACTIVE, BANNED)
     store_id : uuid.UUID | None = None # 소속 매장아이디
     is_business_verified: bool = False # 사업자 확인여부
+    is_identity_verified: bool = False # 본인 확인여부
     created_at : datetime # 가입일, 서버시간 기준
     login_provider: str | None = "email" # 이메일, 카카오, 구글 등 현재 로그인 수단
     businesses: List[BusinessInfoResponse] = [] # 등록된 사업자 목록
@@ -136,6 +137,7 @@ class UserManagementResponse(BaseModel):
     role: UserRole # 권한
     status: UserStatus # 상태
     is_business_verified: bool = False # 사업자 확인여부
+    is_identity_verified: bool = False # 본인 확인여부
     created_at: datetime # 가입일
     store_names_summary: str = Field(..., description="소유 매장명 요약 정보 (예: '모키반점 외 2개')")
     kiosks_summary: UserManagementKioskSummary = Field(..., description="운영 중인 키오스크 현황 (활성/미활성 개수)")

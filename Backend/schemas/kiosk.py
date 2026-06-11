@@ -15,6 +15,7 @@ class KioskUpdate(BaseModel):
     status: str | None = None
     payment_status: str | None = None
     next_payment_date: datetime | None = None
+    billing_key: str | None = None
 
 class KioskResponse(BaseModel):
     id: uuid.UUID
@@ -27,6 +28,7 @@ class KioskResponse(BaseModel):
     status: str
     payment_status: str
     next_payment_date: datetime | None
+    billing_key: str | None = None
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useKiosk } from '../context/KioskContext';
-import { LayoutDashboard, Receipt, Package, Users, LogOut, Store, UserCircle, Monitor, ChevronDown } from 'lucide-react';
+import { LayoutDashboard, Receipt, Package, Users, LogOut, Store, UserCircle, Monitor, ChevronDown, Play } from 'lucide-react';
 import EmptyPage from './EmptyPage';
 import DashboardHome from './DashboardHome';
 import ProfilePage from './ProfilePage';
@@ -11,6 +11,7 @@ import KioskDetail from './KioskDetail';
 import OrdersPage from './OrdersPage';
 import ProductManagement from './ProductManagement';
 import UserManagement from './UserManagement';
+import CounterBoard from './CounterBoard';
 
 export default function Dashboard() {
   const { user, isLoading, logout, token } = useAuth();
@@ -73,6 +74,9 @@ export default function Dashboard() {
           )}
 
           <NavItem to="/orders" icon={Receipt} label="주문 내역" />
+          {canAccessKiosk && (
+            <NavItem to="/counter-board" icon={Play} label="주방 오더 보드" />
+          )}
           <NavItem to="/products" icon={Package} label="상품 관리" />
           {canAccessAdmin && (
             <NavItem to="/users" icon={Users} label="사용자 관리" />
@@ -189,6 +193,10 @@ export default function Dashboard() {
             />
 
             <Route path="/orders" element={<OrdersPage />} />
+            <Route 
+              path="/counter-board" 
+              element={canAccessKiosk ? <CounterBoard /> : <Navigate to="/" replace />} 
+            />
             <Route path="/products" element={<ProductManagement />} />
             <Route 
               path="/users" 
