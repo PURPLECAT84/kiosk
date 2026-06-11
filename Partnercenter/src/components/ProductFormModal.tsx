@@ -116,7 +116,7 @@ export default function ProductFormModal({
     formData.append('file', file);
 
     try {
-      const res = await fetch('/products/image', {
+      const res = await fetch(`/products/image?kiosk_id=${kioskId}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`

@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.responses import RedirectResponse
 from supabase import create_client, Client, ClientOptions
 from pydantic import BaseModel
@@ -106,6 +106,13 @@ async def exchange_supabase_token(request: TokenExchangeRequest, db: Session = D
             db.add(user)
             db.commit()
             db.refresh(user)
+        else:
+            from models.user import UserStatus
+            if user.status == UserStatus.BANNED:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="탈퇴 또는 정지 된 이메일"
+                )
             
         # 4. 우리 백엔드용 JWT 발급
         provider = user_resp.user.app_metadata.get("provider", "social")

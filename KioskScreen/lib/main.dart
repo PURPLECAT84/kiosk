@@ -96,6 +96,8 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
   // 대문화면 여부 및 타이머 상태
   bool _isStarted = false;
   bool _isPaymentRequired = false;
+  bool _isSuspended = false;
+  bool _isPaymentProcessing = false;
   Timer? _inactivityTimer;
 
   // 디바이스 온보딩(매핑) 관련 로컬 상태 변수들
@@ -144,6 +146,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
 
   void _resetInactivityTimer() {
     _inactivityTimer?.cancel();
+    if (_isPaymentProcessing) return; // 결제 진행 중에는 타이머가 동작하지 않도록 방지
     if (_isStarted) {
       // 30초 동안 미조작 시 장바구니 초기화 후 대문화면 복귀
       _inactivityTimer = Timer(const Duration(seconds: 30), () {
@@ -211,11 +214,19 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
           _categories = syncData['categories'];
           _kioskType = syncData['kiosk_type'] ?? 'Restaurant';
           _isPaymentRequired = false;
+          _isSuspended = false;
           _isLoading = false;
         });
       } else if (syncRes.statusCode == 402) {
         setState(() {
           _isPaymentRequired = true;
+          _isSuspended = false;
+          _isLoading = false;
+        });
+      } else if (syncRes.statusCode == 403) {
+        setState(() {
+          _isSuspended = true;
+          _isPaymentRequired = false;
           _isLoading = false;
         });
       } else if (syncRes.statusCode == 404) {
@@ -226,6 +237,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
           _kioskId = null;
           _isStarted = false;
           _isPaymentRequired = false;
+          _isSuspended = false;
           _isLoading = false;
         });
       } else {
@@ -400,6 +412,11 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
 
   // 가상 결제 로딩 애니메이션 및 Mock API 호출
   void _runVirtualPaymentProcess(String? phoneNumber) async {
+    setState(() {
+      _isPaymentProcessing = true;
+    });
+    _inactivityTimer?.cancel(); // 결제 중이므로 타이머 즉시 정지
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -412,6 +429,10 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
       
       if (terminalResult['status'] != 'SUCCESS') {
         Navigator.of(context).pop(); // 결제 진행 모달 닫기
+        setState(() {
+          _isPaymentProcessing = false;
+        });
+        _resetInactivityTimer();
         _showAlertDialog("결제 실패", terminalResult['message'] ?? "단말기 결제 승인 실패");
         return;
       }
@@ -450,9 +471,18 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
           totalAmount: _getCartTotal(),
         );
 
+        setState(() {
+          _isPaymentProcessing = false;
+        });
+        _resetInactivityTimer(); // 타이머 작동 복구
+
         _showPaymentSuccessDialog(data['order_no'], terminalApprovalCode);
       } else {
         final errorData = json.decode(res.body);
+        setState(() {
+          _isPaymentProcessing = false;
+        });
+        _resetInactivityTimer();
         _showAlertDialog("결제 실패", errorData['detail'] ?? "결제 처리 중 서버 에러가 발생했습니다.");
       }
     } catch (e) {
@@ -471,6 +501,11 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
         items: _cart,
         totalAmount: _getCartTotal(),
       );
+      
+      setState(() {
+        _isPaymentProcessing = false;
+      });
+      _resetInactivityTimer();
       
       _showPaymentSuccessDialog(orderNo, approvalCode);
     }
@@ -515,6 +550,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
                   Navigator.of(ctx).pop();
                   setState(() {
                     _cart.clear(); // 장바구니 초기화
+                    _isStarted = false; // 대문화면(시작화면)으로 복귀
                   });
                   _syncKioskData(); // 재고 상태 동기화 재수행
                 },
@@ -555,6 +591,87 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
       return Scaffold(
         backgroundColor: const Color(0xffF3F4F6),
         body: _buildOnboardingScreen(),
+      );
+    }
+
+    if (_isSuspended) {
+      return Scaffold(
+        backgroundColor: const Color(0xffF3F4F6),
+        body: Center(
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 500),
+            padding: const EdgeInsets.all(40.0),
+            margin: const EdgeInsets.symmetric(horizontal: 24.0),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24.0),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                )
+              ]
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.error_outline_rounded,
+                    color: Colors.red,
+                    size: 40,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  "기기 사용 불가 (정지 상태)",
+                  style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xff111827)),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  "본 매장의 관리자 계정이 회원 탈퇴 또는 정지 처리되었습니다.\n\n해당 사유로 인해 본 키오스크 기기 작동이 즉시 중지되며 사용할 수 없습니다.",
+                  style: TextStyle(fontSize: 16, color: Color(0xff4B5563), height: 1.5),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton(
+                  onPressed: () {
+                    _syncKioskData();
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 18),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14.0),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.refresh, color: Colors.white),
+                      SizedBox(width: 8),
+                      Text(
+                        "상태 재확인 (새로고침)",
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 

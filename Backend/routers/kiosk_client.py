@@ -42,6 +42,14 @@ async def sync_kiosk(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="사용료 연체로 인해 키오스크 사용이 중지되었습니다. 파트너센터에서 결제 정보를 확인해주세요."
         )
+        
+    # 1-3. 점주 계정 상태 검증 (탈퇴 또는 정지 시 차단)
+    from models.user import UserStatus
+    if kiosk.owner and kiosk.owner.status == UserStatus.BANNED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="탈퇴 또는 정지 된 이메일로 등록된 매장입니다. 기기 사용이 중지됩니다."
+        )
     
     # 2. 점주 사업자명(매장명) 조회
     store_name = "미지정 매장"
@@ -133,20 +141,10 @@ async def mock_payment(
     approval_code = datetime.now().strftime("%y%m%d") + "".join(random.choice("0123456789") for _ in range(6))
     
     try:
-        # 4. 영수증 DB 적재
-        new_order = Order(
-            order_no=order_no,
-            kiosk_id=kiosk.id,
-            total_amount=request.total_amount,
-            payment_method=request.payment_method,
-            payment_provider=request.payment_provider,
-            approval_code=approval_code,
-            status="Completed"
-        )
-        db.add(new_order)
-        db.flush() # ID 획득을 위한 플러시
+        # 4. 구매 품목 검증 및 합산금액 계산 (클라이언트의 total_amount 신뢰 방지)
+        calculated_total = 0
+        order_items_to_add = []
         
-        # 5. 구매 품목 DB 적재 및 재고 차감 (재고관리 설정된 경우만)
         for item in request.items:
             prod_id = uuid.UUID(item["product_id"]) if isinstance(item["product_id"], str) else item["product_id"]
             product = db.get(Product, prod_id)
@@ -164,15 +162,37 @@ async def mock_payment(
                 product.stock -= item["quantity"]
                 if product.stock == 0:
                     product.is_active = False # 품절 시 비활성화
-                
+            
+            calculated_total += product.price * item["quantity"]
+            
             order_item = OrderItem(
-                order_id=new_order.id,
                 product_id=product.id,
                 product_name=product.name,
                 product_price=product.price,
                 quantity=item["quantity"]
             )
-            db.add(order_item)
+            order_items_to_add.append(order_item)
+
+        # 외식형(Restaurant)일 경우 주문 초기 상태는 "Preparing"으로 적재 (order_service.py와 동일하게 유지)
+        initial_status = "Preparing" if kiosk.type == "Restaurant" else "Completed"
+
+        # 5. 영수증 DB 적재
+        new_order = Order(
+            order_no=order_no,
+            kiosk_id=kiosk.id,
+            total_amount=calculated_total, # 프론트엔드가 보낸 금액 대신 직접 계산한 값을 강제 보정 적용
+            payment_method=request.payment_method,
+            payment_provider=request.payment_provider,
+            approval_code=approval_code,
+            status=initial_status
+        )
+        db.add(new_order)
+        db.flush() # ID 획득을 위한 플러시
+        
+        # 6. 품목 정보에 order_id 바인딩 및 적재
+        for o_item in order_items_to_add:
+            o_item.order_id = new_order.id
+            db.add(o_item)
             
         db.commit()
         db.refresh(new_order)

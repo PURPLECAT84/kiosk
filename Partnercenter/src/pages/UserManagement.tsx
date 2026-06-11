@@ -22,7 +22,7 @@ interface UserItem {
 }
 
 export default function UserManagement() {
-  const { token } = useAuth();
+  const { token, user: currentUser } = useAuth();
   const navigate = useNavigate();
   const [users, setUsers] = useState<UserItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,6 +61,69 @@ export default function UserManagement() {
         const data = await res.json();
         throw new Error(data.detail || '사업자 승인 상태 변경에 실패했습니다.');
       }
+      fetchUsers();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    try {
+      const res = await fetch(`/users/${userId}/role?role=${newRole}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || '권한 변경에 실패했습니다.');
+      }
+      alert('사용자 권한이 성공적으로 변경되었습니다.');
+      fetchUsers();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleStatusToggle = async (userId: string, currentStatus: string) => {
+    const nextStatus = currentStatus === 'ACTIVE' ? 'BANNED' : 'ACTIVE';
+    const msg = nextStatus === 'ACTIVE' ? '계정을 다시 활성화하시겠습니까?' : '정말로 이 계정을 정지(비활성화)하시겠습니까?';
+    if (!window.confirm(msg)) return;
+
+    try {
+      const res = await fetch(`/users/${userId}/status?user_status=${nextStatus}`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.detail || '상태 변경에 실패했습니다.');
+      }
+      alert('사용자 계정 상태가 변경되었습니다.');
+      fetchUsers();
+    } catch (err: any) {
+      alert(err.message);
+    }
+  };
+
+  const handleAdminDeleteUser = async (userId: string, userName: string) => {
+    if (!window.confirm(`⚠️ 경고: 정말 [${userName}] 사용자를 완전히 삭제하시겠습니까?\n삭제 시 이 사용자와 연결된 모든 매장, 키오스크, 메뉴 데이터가 영구적으로 파괴되며 복구할 수 없습니다.`)) return;
+
+    try {
+      const res = await fetch(`/users/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || '사용자 삭제에 실패했습니다.');
+      }
+      alert('사용자가 성공적으로 삭제되었습니다.');
       fetchUsers();
     } catch (err: any) {
       alert(err.message);
@@ -115,7 +178,11 @@ export default function UserManagement() {
                 <th className="px-6 py-4">운영 키오스크 수</th>
                 <th className="px-6 py-4">사업자 확인</th>
                 <th className="px-6 py-4">권한</th>
+                <th className="px-6 py-4">계정 상태</th>
                 <th className="px-6 py-4">가입일</th>
+                {(currentUser?.role === 'DEV' || currentUser?.role === 'HEAD') && (
+                  <th className="px-6 py-4 text-center">관리</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-gray-700 text-base">
@@ -178,13 +245,38 @@ export default function UserManagement() {
                       )}
                     </td>
                     <td className="px-6 py-4">
+                      {(currentUser?.role === 'DEV' || currentUser?.role === 'HEAD') && u.id !== currentUser.id ? (
+                        <select
+                          value={u.role}
+                          onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                          className="px-2.5 py-1 rounded-xl text-xs font-bold border border-gray-200 focus:outline-none focus:ring-1 focus:ring-[#7C3AED] cursor-pointer bg-white"
+                        >
+                          <option value="DEV">DEV</option>
+                          <option value="HEAD">HEAD</option>
+                          <option value="MASTER">MASTER</option>
+                          <option value="MANAGER">MANAGER</option>
+                          <option value="STAFF">STAFF</option>
+                          <option value="NONE">NONE</option>
+                        </select>
+                      ) : (
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                          u.role === 'DEV' ? 'bg-purple-100 text-purple-700' :
+                          u.role === 'MASTER' ? 'bg-red-100 text-red-700' :
+                          u.role === 'HEAD' ? 'bg-blue-100 text-blue-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                          {u.role}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
                       <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        u.role === 'DEV' ? 'bg-purple-100 text-purple-700' :
-                        u.role === 'MASTER' ? 'bg-red-100 text-red-700' :
-                        u.role === 'HEAD' ? 'bg-blue-100 text-blue-700' :
-                        'bg-gray-100 text-gray-700'
+                        u.status === 'ACTIVE' ? 'bg-green-100 text-green-700' :
+                        u.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-red-100 text-red-700'
                       }`}>
-                        {u.role}
+                        {u.status === 'ACTIVE' ? '정상 활성' :
+                         u.status === 'PENDING' ? '승인 대기' : '정지 / 탈퇴'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-sm text-gray-500">
@@ -194,6 +286,32 @@ export default function UserManagement() {
                         day: '2-digit'
                       })}
                     </td>
+                    {(currentUser?.role === 'DEV' || currentUser?.role === 'HEAD') && (
+                      <td className="px-6 py-4 text-center flex justify-center gap-2">
+                        {u.id !== currentUser.id ? (
+                          <>
+                            <button
+                              onClick={() => handleStatusToggle(u.id, u.status)}
+                              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-sm ${
+                                u.status === 'ACTIVE'
+                                  ? 'bg-red-50 text-red-600 hover:bg-red-100'
+                                  : 'bg-green-50 text-green-600 hover:bg-green-100'
+                              }`}
+                            >
+                              {u.status === 'ACTIVE' ? '정지' : '활성화'}
+                            </button>
+                            <button
+                              onClick={() => handleAdminDeleteUser(u.id, u.name)}
+                              className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-gray-50 hover:bg-red-650 hover:text-white text-gray-500 transition-all cursor-pointer shadow-sm"
+                            >
+                              삭제
+                            </button>
+                          </>
+                        ) : (
+                          <span className="text-gray-400 text-xs font-medium">본인 계정</span>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))
               )}

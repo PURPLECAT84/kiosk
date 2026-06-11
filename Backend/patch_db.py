@@ -131,4 +131,57 @@ with engine.connect() as conn:
         else:
             print("Error adding 'billing_key':", e)
 
+    # 9. Supabase Storage kiosk_image 버킷 RLS 설정 자동화
+    try:
+        # storage.buckets에 kiosk_image 등록
+        conn.execute(text("INSERT INTO storage.buckets (id, name, public) VALUES ('kiosk_image', 'kiosk_image', true) ON CONFLICT (id) DO UPDATE SET public = true;"))
+        
+        # 구 정책 삭제
+        conn.execute(text("DROP POLICY IF EXISTS \"Allow public insert on kiosk_image\" ON storage.objects;"))
+        conn.execute(text("DROP POLICY IF EXISTS \"Allow public select on kiosk_image\" ON storage.objects;"))
+        conn.execute(text("DROP POLICY IF EXISTS \"Allow public update on kiosk_image\" ON storage.objects;"))
+        conn.execute(text("DROP POLICY IF EXISTS \"Allow public delete on kiosk_image\" ON storage.objects;"))
+        
+        # INSERT 정책 (public/anon 업로드 허용)
+        conn.execute(text("""
+            CREATE POLICY "Allow public insert on kiosk_image" 
+            ON storage.objects 
+            FOR INSERT 
+            TO public 
+            WITH CHECK (bucket_id = 'kiosk_image');
+        """))
+        
+        # SELECT 정책 (public/anon 조회 허용)
+        conn.execute(text("""
+            CREATE POLICY "Allow public select on kiosk_image" 
+            ON storage.objects 
+            FOR SELECT 
+            TO public 
+            USING (bucket_id = 'kiosk_image');
+        """))
+
+        # UPDATE 정책 (public/anon 수정/Upsert 허용)
+        conn.execute(text("""
+            CREATE POLICY "Allow public update on kiosk_image" 
+            ON storage.objects 
+            FOR UPDATE 
+            TO public 
+            USING (bucket_id = 'kiosk_image')
+            WITH CHECK (bucket_id = 'kiosk_image');
+        """))
+
+        # DELETE 정책 (public/anon 삭제 허용)
+        conn.execute(text("""
+            CREATE POLICY "Allow public delete on kiosk_image" 
+            ON storage.objects 
+            FOR DELETE 
+            TO public 
+            USING (bucket_id = 'kiosk_image');
+        """))
+        conn.commit()
+        print("Storage RLS policies for 'kiosk_image' successfully applied/updated.")
+    except Exception as e:
+        conn.rollback()
+        print("Error applying Storage RLS policies:", e)
+
 print("DB patching complete.")

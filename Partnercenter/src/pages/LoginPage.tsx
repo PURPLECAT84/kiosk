@@ -27,7 +27,8 @@ export default function LoginPage() {
       });
 
       if (!res.ok) {
-        throw new Error('이메일 또는 비밀번호가 일치하지 않습니다.');
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.detail || '이메일 또는 비밀번호가 일치하지 않습니다.');
       }
 
       const data = await res.json();

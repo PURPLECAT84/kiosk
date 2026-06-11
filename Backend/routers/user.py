@@ -33,6 +33,12 @@ def token_access(form_data: OAuth2PasswordRequestForm = Depends(), db: Session =
             detail="이메일 또는 비밀번호가 일치하지 않습니다", 
             headers={"WWW-Authenticate": "Bearer"}
         )
+        
+    if user.status == UserStatus.BANNED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="탈퇴 또는 정지 된 이메일"
+        )
     
     access_token = create_access_token(data={"sub": user.email, "provider": "email"})
     return {"access_token": access_token, "token_type": "bearer"}
@@ -168,10 +174,11 @@ async def delete_user(
     db: Session = Depends(get_db),
     current_user: UserInfo = Depends(get_current_user) # 🔒 권한 검사
 ):
-    if not verify_password(confirm.password, current_user.password):
-          raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="비밀번호가 일치하지 않습니다")
+    if current_user.password != "SOCIAL_LOGIN":
+        if not verify_password(confirm.password, current_user.password):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="비밀번호가 일치하지 않습니다")
       
-    db.delete(current_user)
+    current_user.status = UserStatus.BANNED
     db.commit()
     return None
 
@@ -293,7 +300,7 @@ async def add_business_info(
             detail="이미 존재하는 매장명입니다. 다른 매장명을 사용해주세요."
         )
 
-    # 3. BusinessInfo 생성 및 매핑
+    # 3. BusinessInfo 생성 및 매핑 (점주가 사전에 이미 승인된 계정인 경우 즉시 자동 승인)
     new_business = BusinessInfo(
         user_id=current_user.id,
         business_number=body.business_number,
@@ -302,7 +309,7 @@ async def add_business_info(
         representative_phone=body.representative_phone,
         store_name=body.store_name,
         document_url=body.document_url,
-        is_verified=False
+        is_verified=current_user.is_business_verified
     )
     db.add(new_business)
     db.commit()
@@ -385,3 +392,112 @@ async def verify_business(
     db.commit()
     db.refresh(user)
     return user
+
+
+@router.patch("/{user_id}/role", response_model=UserResponse, summary="사용자 권한 조정 (관리자 전용)")
+async def update_user_role(
+    user_id: uuid.UUID,
+    role: UserRole,
+    db: Session = Depends(get_db),
+    current_user: UserInfo = Depends(get_current_user)
+):
+    """
+    [관리자 전용 사용자 권한 조정 API]
+    개발자(DEV) 또는 본사(HEAD) 관리자가 다른 사용자의 권한(Role)을 직접 수정할 수 있습니다.
+    """
+    if current_user.role not in [UserRole.DEV, UserRole.HEAD]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="사용자 권한 조정은 DEV 또는 HEAD 관리자만 가능합니다."
+        )
+
+    stmt = select(UserInfo).where(UserInfo.id == user_id)
+    user = db.execute(stmt).scalars().first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="사용자를 찾을 수 없습니다."
+        )
+
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="자기 자신의 권한은 변경할 수 없습니다."
+        )
+
+    user.role = role
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.patch("/{user_id}/status", response_model=UserResponse, summary="사용자 계정 상태(정지/활성) 변경 (관리자 전용)")
+async def update_user_status(
+    user_id: uuid.UUID,
+    user_status: UserStatus,
+    db: Session = Depends(get_db),
+    current_user: UserInfo = Depends(get_current_user)
+):
+    """
+    [관리자 전용 사용자 계정 상태 변경 API]
+    개발자(DEV) 또는 본사(HEAD) 관리자만 다른 사용자의 계정을 정지(BANNED)하거나 활성(ACTIVE)화할 수 있습니다.
+    """
+    if current_user.role not in [UserRole.DEV, UserRole.HEAD]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="사용자 계정 상태 변경은 DEV 또는 HEAD 관리자만 가능합니다."
+        )
+
+    stmt = select(UserInfo).where(UserInfo.id == user_id)
+    user = db.execute(stmt).scalars().first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="사용자를 찾을 수 없습니다."
+        )
+
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="자기 자신의 상태는 변경할 수 없습니다."
+        )
+
+    user.status = user_status
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT, summary="사용자 계정 완전 삭제 (관리자 전용)")
+async def admin_delete_user(
+    user_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: UserInfo = Depends(get_current_user)
+):
+    """
+    [관리자 전용 사용자 계정 완전 삭제 API]
+    개발자(DEV) 또는 본사(HEAD) 관리자만 다른 사용자의 계정을 데이터베이스에서 완전히 삭제할 수 있습니다.
+    """
+    if current_user.role not in [UserRole.DEV, UserRole.HEAD]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="사용자 완전 삭제 권한은 DEV 또는 HEAD 관리자만 가능합니다."
+        )
+
+    stmt = select(UserInfo).where(UserInfo.id == user_id)
+    user = db.execute(stmt).scalars().first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="사용자를 찾을 수 없습니다."
+        )
+
+    if user.id == current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="자기 자신의 계정은 삭제할 수 없습니다."
+        )
+
+    db.delete(user)
+    db.commit()
+    return None

@@ -38,8 +38,11 @@ export default function AuthCallbackPage() {
       },
       body: JSON.stringify({ access_token: accessToken }),
     })
-      .then((res) => {
-        if (!res.ok) throw new Error('토큰 교환 실패');
+      .then(async (res) => {
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || '토큰 교환 실패');
+        }
         return res.json();
       })
       .then((data) => {
@@ -49,8 +52,8 @@ export default function AuthCallbackPage() {
       })
       .catch((err) => {
         console.error(err);
-        setStatus('인증 처리 중 오류가 발생했습니다.');
-        setTimeout(() => navigate('/login'), 3000);
+        setStatus(`로그인 실패: ${err.message || '인증 처리 중 오류가 발생했습니다.'}`);
+        setTimeout(() => navigate('/login'), 4000);
       });
   }, [navigate, login]);
 

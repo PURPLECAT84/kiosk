@@ -26,6 +26,43 @@ interface OrderItem {
   refunded_at?: string | null;
 }
 
+const getOrderStatusBadge = (status: string) => {
+  switch (status) {
+    case 'REFUNDED':
+      return { text: '환불완료', className: 'bg-red-50 text-red-600' };
+    case 'Completed':
+      return { text: '결제완료', className: 'bg-green-50 text-green-600' };
+    case 'Preparing':
+      return { text: '준비중', className: 'bg-blue-50 text-blue-600' };
+    case 'Cooking':
+      return { text: '조리중', className: 'bg-yellow-50 text-yellow-600' };
+    case 'Ready':
+      return { text: '조리완료', className: 'bg-indigo-50 text-indigo-600' };
+    case 'Served':
+      return { text: '수령완료', className: 'bg-gray-100 text-gray-500' };
+    default:
+      return { text: status || '결제완료', className: 'bg-green-50 text-green-600' };
+  }
+};
+
+const getOrderDetailStatusBadge = (status: string) => {
+  if (status === 'REFUNDED') {
+    return { text: '취소완료 (환불됨)', className: 'bg-red-50 text-red-600' };
+  }
+  switch (status) {
+    case 'Preparing':
+      return { text: '결제승인 (준비중)', className: 'bg-blue-50 text-blue-600' };
+    case 'Cooking':
+      return { text: '결제승인 (조리중)', className: 'bg-yellow-50 text-yellow-600' };
+    case 'Ready':
+      return { text: '결제승인 (조리완료)', className: 'bg-indigo-50 text-indigo-600' };
+    case 'Served':
+      return { text: '결제승인 (수령완료)', className: 'bg-gray-100 text-gray-500' };
+    default:
+      return { text: '결제완료 승인', className: 'bg-green-50 text-green-600' };
+  }
+};
+
 export default function OrdersPage() {
   const { token } = useAuth();
   const { currentKioskId } = useKiosk();
@@ -386,13 +423,14 @@ export default function OrdersPage() {
                         ₩{order.total_amount.toLocaleString()}
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                          order.status === 'Completed' 
-                            ? 'bg-green-50 text-green-600' 
-                            : 'bg-red-50 text-red-600'
-                        }`}>
-                          {order.status === 'Completed' ? '결제완료' : '환불완료'}
-                        </span>
+                        {(() => {
+                          const badge = getOrderStatusBadge(order.status);
+                          return (
+                            <span className={`px-3 py-1 rounded-full text-xs font-bold ${badge.className}`}>
+                              {badge.text}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-6 py-4 text-center">
                         <button
@@ -496,13 +534,14 @@ export default function OrdersPage() {
 
                   {/* 상태 배지 */}
                   <div className="text-center">
-                    <span className={`px-4 py-1.5 rounded-full text-xs font-bold inline-block ${
-                      detailedOrder.status === 'Completed' 
-                        ? 'bg-green-50 text-green-600' 
-                        : 'bg-red-50 text-red-600'
-                    }`}>
-                      {detailedOrder.status === 'Completed' ? '결제완료 승인' : '취소완료 (환불됨)'}
-                    </span>
+                    {(() => {
+                      const badge = getOrderDetailStatusBadge(detailedOrder.status);
+                      return (
+                        <span className={`px-4 py-1.5 rounded-full text-xs font-bold inline-block ${badge.className}`}>
+                          {badge.text}
+                        </span>
+                      );
+                    })()}
                   </div>
 
                   {/* 영수증 이미지 다운 및 결제 취소 단추 */}
@@ -515,7 +554,7 @@ export default function OrdersPage() {
                       <span>영수증 다운로드</span>
                     </button>
                     
-                    {detailedOrder.status === 'Completed' && !isRefundConfirmOpen && (
+                    {detailedOrder.status !== 'REFUNDED' && !isRefundConfirmOpen && (
                       <button
                         onClick={() => setIsRefundConfirmOpen(true)}
                         className="flex-1 flex items-center justify-center space-x-1.5 bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3.5 rounded-xl transition-all cursor-pointer text-sm"
@@ -527,7 +566,7 @@ export default function OrdersPage() {
                   </div>
 
                   {/* 환불 상세 입력 모달 폼 */}
-                  {detailedOrder.status === 'Completed' && isRefundConfirmOpen && (
+                  {detailedOrder.status !== 'REFUNDED' && isRefundConfirmOpen && (
                     <form onSubmit={handleRefund} className="space-y-4 bg-red-50 border border-red-200 p-5 rounded-2xl">
                       <div className="flex items-center space-x-2 text-red-700 font-bold text-sm">
                         <AlertTriangle size={18} />

@@ -356,6 +356,7 @@ import mimetypes
 
 @router.post("/image", summary="상품 이미지 단일 업로드 (Supabase Storage)")
 async def upload_product_image(
+    kiosk_id: str | None = None,
     file: UploadFile = File(...),
     current_user: UserInfo = Depends(get_current_user)
 ):
@@ -377,11 +378,16 @@ async def upload_product_image(
     if not supabase_url or not supabase_key:
         raise HTTPException(status_code=500, detail="Supabase 설정 정보를 찾을 수 없습니다.")
 
-    # 파일명 고유화
-    filename = f"{uuid.uuid4()}.{ext}"
+    # 저장 경로(path) 분기 결정
+    if kiosk_id:
+        # 상품 이미지: kiosk_image/{kiosk_id}/{random_uuid}.{ext}
+        filename = f"{kiosk_id}/{uuid.uuid4()}.{ext}"
+    else:
+        # 사업자 등록증 등 공통 서류: kiosk_image/business/{user_id}.{ext}
+        filename = f"business/{current_user.id}.{ext}"
     
     # Supabase Storage 업로드 REST API 호출
-    upload_url = f"{supabase_url}/storage/v1/object/products/{filename}"
+    upload_url = f"{supabase_url}/storage/v1/object/kiosk_image/{filename}"
     headers = {
         "Authorization": f"Bearer {supabase_key}",
         "Content-Type": mime_type,
@@ -394,21 +400,25 @@ async def upload_product_image(
         async with httpx.AsyncClient() as client:
             res = await client.post(upload_url, content=file_content, headers=headers)
             if res.status_code != 200:
-                # 버킷 생성 에러 등으로 인해 업로드가 실패한 경우, 로컬 static 폴더로 폴백 제공 (무중단 UX 보장)
+                # 버킷 생성 에러 등으로 인해 업로드가 실패한 경우, 에러 상세 로그를 남기고 로컬 static 폴더로 폴백 제공
+                print(f"[ERROR] Supabase Storage 업로드 실패 - 상태 코드: {res.status_code}, 본문: {res.text}")
+                local_filename = filename.replace('/', '_')
                 os.makedirs("static/images", exist_ok=True)
-                file_path = f"static/images/{filename}"
+                file_path = f"static/images/{local_filename}"
                 with open(file_path, "wb") as buffer:
                     buffer.write(file_content)
-                return {"image_url": f"/static/images/{filename}"}
+                return {"image_url": f"/static/images/{local_filename}"}
                 
         # 성공 시 Supabase Public URL 반환
-        public_url = f"{supabase_url}/storage/v1/object/public/products/{filename}"
+        public_url = f"{supabase_url}/storage/v1/object/public/kiosk_image/{filename}"
         return {"image_url": public_url}
         
     except Exception as e:
-        # 에러 발생 시 로컬 static 폴더로 폴백 제공 (오프라인/로컬 테스트 UX 보장)
+        # 에러 발생 시 에러 예외 로그를 남기고 로컬 static 폴더로 폴백 제공 (오프라인/로컬 테스트 UX 보장)
+        print(f"[ERROR] Supabase Storage 업로드 도중 예외 발생: {str(e)}")
+        local_filename = filename.replace('/', '_')
         os.makedirs("static/images", exist_ok=True)
-        file_path = f"static/images/{filename}"
+        file_path = f"static/images/{local_filename}"
         with open(file_path, "wb") as buffer:
             buffer.write(file_content)
-        return {"image_url": f"/static/images/{filename}"}
+        return {"image_url": f"/static/images/{local_filename}"}

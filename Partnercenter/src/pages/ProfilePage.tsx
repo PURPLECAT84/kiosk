@@ -27,8 +27,41 @@ export default function ProfilePage() {
   const [bizError, setBizError] = useState('');
   const [bizSuccess, setBizSuccess] = useState('');
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  
+  // 회원 탈퇴 모달 관련 상태
+  const [isDeleteUserOpen, setIsDeleteUserOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState('');
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
+  const { logout } = useAuth();
 
   if (!user) return null;
+
+  const handleDeleteUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDeleteError('');
+    setIsDeletingUser(true);
+    try {
+      const res = await fetch('/users/me', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ password: deletePassword })
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.detail || '회원 탈퇴 처리에 실패했습니다.');
+      }
+      alert('회원 탈퇴가 완료되었습니다. 그동안 이용해 주셔서 감사합니다.');
+      logout();
+    } catch (err: any) {
+      setDeleteError(err.message);
+    } finally {
+      setIsDeletingUser(false);
+    }
+  };
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -556,6 +589,92 @@ export default function ProfilePage() {
               사업자 정보 및 매장 추가
             </button>
           </form>
+        </div>
+      )}
+
+      {/* ⚠️ 회원 탈퇴 섹션 */}
+      <div className="bg-red-50 border border-red-200 rounded-2xl p-8 space-y-4 mt-8">
+        <div className="flex items-center space-x-2 text-red-700">
+          <ShieldAlert size={24} />
+          <h3 className="text-xl font-bold">회원 탈퇴</h3>
+        </div>
+        <p className="text-sm text-red-850">
+          회원 탈퇴를 진행하시면 소유하신 모든 매장 정보 및 키오스크 데이터의 사용이 즉시 중지(비활성화)됩니다.<br />
+          신중하게 결정해 주시기 바랍니다.
+        </p>
+        <button
+          onClick={() => {
+            setDeletePassword('');
+            setDeleteError('');
+            setIsDeleteUserOpen(true);
+          }}
+          className="bg-red-600 hover:bg-red-700 text-white font-bold px-6 py-3 rounded-xl transition-colors cursor-pointer text-sm shadow-sm"
+        >
+          회원 탈퇴 진행하기
+        </button>
+      </div>
+
+      {/* 회원 탈퇴 최종 확인 모달 */}
+      {isDeleteUserOpen && (
+        <div className="fixed inset-0 bg-black/40 flex justify-center items-center z-50 p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-8 shadow-xl space-y-6 relative">
+            <button
+              onClick={() => setIsDeleteUserOpen(false)}
+              className="absolute right-6 top-6 text-gray-400 hover:text-gray-650 cursor-pointer"
+            >
+              <X size={24} />
+            </button>
+            
+            <div className="text-center pb-2">
+              <ShieldAlert className="mx-auto text-red-600 mb-3" size={40} />
+              <h3 className="text-2xl font-bold text-gray-900">정말 탈퇴하시겠습니까?</h3>
+              <p className="text-xs text-gray-400 mt-1.5">MOKI Partner 계정 탈퇴 확인</p>
+            </div>
+
+            {deleteError && (
+              <div className="bg-red-50 text-red-700 p-4 rounded-xl text-xs font-semibold">
+                {deleteError}
+              </div>
+            )}
+
+            <form onSubmit={handleDeleteUser} className="space-y-4">
+              {user.login_provider === 'email' || !user.login_provider ? (
+                <div>
+                  <label className="block text-xs font-bold text-gray-700 mb-2">보안을 위해 비밀번호를 입력해 주세요.</label>
+                  <input
+                    type="password"
+                    value={deletePassword}
+                    onChange={(e) => setDeletePassword(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none text-sm font-semibold"
+                    placeholder="비밀번호 입력"
+                    required
+                  />
+                </div>
+              ) : (
+                <div className="bg-gray-50 border border-gray-200 p-4 rounded-2xl text-xs text-gray-600 space-y-2">
+                  <p className="font-bold text-gray-700">💬 소셜 연동 계정 안내</p>
+                  <p>소셜 연동 계정({user.login_provider === 'kakao' ? '카카오' : '구글'})은 별도의 비밀번호 확인 없이 탈퇴를 완료할 수 있습니다.</p>
+                </div>
+              )}
+
+              <div className="flex space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsDeleteUserOpen(false)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3.5 rounded-xl text-sm transition-colors cursor-pointer"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={isDeletingUser}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-xl text-sm transition-all flex justify-center items-center cursor-pointer shadow-sm"
+                >
+                  {isDeletingUser ? <Loader2 className="animate-spin" size={18} /> : '탈퇴 완료하기'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
