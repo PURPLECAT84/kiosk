@@ -28,6 +28,32 @@ interface CategoryItem {
   name: string;
 }
 
+// 이미지 로드 실패 시 무한 루프 방지 및 깔끔한 Fallback을 위한 이미지 컴포넌트
+function ProductImage({ src, alt }: { src: string; alt: string }) {
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [src]);
+
+  if (hasError || !src) {
+    return (
+      <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center border border-gray-200 text-gray-400">
+        <Package size={22} />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      className="w-12 h-12 rounded-xl object-cover border border-gray-100"
+      onError={() => setHasError(true)}
+    />
+  );
+}
+
 export default function ProductManagement() {
   const { token } = useAuth();
   const { currentKioskId } = useKiosk();
@@ -472,14 +498,7 @@ export default function ProductManagement() {
                         </td>
                         {/* 3. 이미지 */}
                         <td className="px-6 py-4">
-                          <img 
-                            src={imgUrl} 
-                            alt={product.name} 
-                            className="w-12 h-12 rounded-xl object-cover border border-gray-100"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = '/static/images/placeholder.png';
-                            }}
-                          />
+                          <ProductImage src={imgUrl} alt={product.name} />
                         </td>
                         {/* 4. 상품명 */}
                         <td className="px-6 py-4">

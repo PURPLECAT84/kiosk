@@ -5,6 +5,7 @@ import { UserPlus, Mail, KeyRound, User, Phone } from 'lucide-react';
 export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
@@ -20,6 +21,12 @@ export default function SignupPage() {
     const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[^a-zA-Z0-9\s]).{8,}$/;
     if (!passwordRegex.test(password)) {
       setErrorMsg('비밀번호는 특수문자, 영문, 숫자를 조합하여 입력해주세요.');
+      return;
+    }
+
+    // 비밀번호 일치 검사
+    if (password !== passwordConfirm) {
+      setErrorMsg('비밀번호가 일치하지 않습니다.');
       return;
     }
 
@@ -93,6 +100,21 @@ export default function SignupPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-12 pr-4 py-3 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none"
                   placeholder="영문, 숫자, 특수문자 포함 8자 이상"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-lg font-medium text-gray-700 mb-2">비밀번호 확인</label>
+              <div className="relative">
+                <KeyRound className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={24} />
+                <input
+                  type="password"
+                  value={passwordConfirm}
+                  onChange={(e) => setPasswordConfirm(e.target.value)}
+                  className="w-full pl-12 pr-4 py-3 text-lg border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none"
+                  placeholder="비밀번호 재입력"
                   required
                 />
               </div>

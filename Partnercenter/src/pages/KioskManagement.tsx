@@ -35,18 +35,7 @@ export default function KioskManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // 본인인증 모달 및 입력 필드 상태
-  const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
-  const [isVerifying, setIsVerifying] = useState(false);
-  const [verifyName, setVerifyName] = useState('');
-  const [verifyPhone, setVerifyPhone] = useState('');
-  const [verifyOperator, setVerifyOperator] = useState('SKT');
-  const [verifyBirthDate, setVerifyBirthDate] = useState('');
-  const [verifyGender, setVerifyGender] = useState('MALE');
-  const [verifyOtp, setVerifyOtp] = useState('');
-  const [verificationId, setVerificationId] = useState<string | null>(null);
-  const [verificationTimer, setVerificationTimer] = useState(0);
-  const [isOtpSent, setIsOtpSent] = useState(false);
+
 
   // 등록 모달 상태
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -57,79 +46,7 @@ export default function KioskManagement() {
   const [newKioskStatus, setNewKioskStatus] = useState('WAITING');
   const [isCreating, setIsCreating] = useState(false);
 
-  // 본인인증 인증번호 만료 타이머
-  useEffect(() => {
-    if (verificationTimer <= 0) return;
-    const interval = setInterval(() => {
-      setVerificationTimer(prev => prev - 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [verificationTimer]);
 
-  const handleSendOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsVerifying(true);
-    try {
-      const res = await fetch('/auth/identity-verification/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          name: verifyName,
-          phone: verifyPhone,
-          operator: verifyOperator,
-          birth_date: verifyBirthDate,
-          gender: verifyGender
-        })
-      });
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || '인증번호 발송에 실패했습니다.');
-      }
-      const data = await res.json();
-      setVerificationId(data.verification_id);
-      setIsOtpSent(true);
-      setVerificationTimer(180); // 3분 타이머 시작
-      alert('인증번호 문자가 발송되었습니다. 수신하신 6자리 번호를 입력해주세요.');
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
-  const handleConfirmOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!verificationId) return;
-    setIsVerifying(true);
-    try {
-      const res = await fetch('/auth/identity-verification/confirm', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          verification_id: verificationId,
-          otp: verifyOtp
-        })
-      });
-      if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.detail || '인증번호 확인에 실패했습니다.');
-      }
-      alert('본인확인 실명인증이 성공적으로 완료되었습니다!');
-      await refreshUser();
-      setIsVerifyModalOpen(false);
-      setIsModalOpen(true);
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setIsVerifying(false);
-    }
-  };
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -293,11 +210,7 @@ export default function KioskManagement() {
         {(stores.length > 0 || user?.role === 'DEV' || user?.role === 'HEAD') && (
           <button
             onClick={() => {
-              if (user?.role !== 'DEV' && user?.role !== 'HEAD' && !user?.is_identity_verified) {
-                setIsVerifyModalOpen(true);
-              } else {
-                setIsModalOpen(true);
-              }
+              setIsModalOpen(true);
             }}
             className="flex items-center space-x-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold px-5 py-3 rounded-xl transition-all shadow-sm cursor-pointer"
           >
@@ -538,176 +451,7 @@ export default function KioskManagement() {
         </div>
       )}
 
-      {/* 본인인증 모달 */}
-      {isVerifyModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-50 p-4">
-          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl animate-fade-in space-y-6 max-h-[90vh] overflow-y-auto">
-            <div className="text-center">
-              <div className="w-14 h-14 bg-[#7C3AED]/10 text-[#7C3AED] rounded-full flex items-center justify-center mx-auto mb-3">
-                <CheckCircle2 size={28} />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900">본인확인 실명인증</h3>
-              <p className="text-gray-500 text-sm mt-1.5 leading-relaxed">
-                기기 등록 및 보안 권한 활성화를 위해 최초 1회 휴대폰 실명 본인확인을 진행해주세요.
-              </p>
-            </div>
 
-            <form onSubmit={handleSendOtp} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">이름</label>
-                <input
-                  type="text"
-                  value={verifyName}
-                  onChange={(e) => setVerifyName(e.target.value)}
-                  disabled={isOtpSent}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-sm font-semibold disabled:bg-gray-50"
-                  placeholder="실명 입력"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">생년월일 (8자리)</label>
-                  <input
-                    type="text"
-                    maxLength={8}
-                    value={verifyBirthDate}
-                    onChange={(e) => setVerifyBirthDate(e.target.value)}
-                    disabled={isOtpSent}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-sm font-semibold disabled:bg-gray-50"
-                    placeholder="예: 19900101"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">성별</label>
-                  <div className="flex border border-gray-300 rounded-xl p-1 bg-gray-50/50">
-                    <button
-                      type="button"
-                      disabled={isOtpSent}
-                      onClick={() => setVerifyGender('MALE')}
-                      className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                        verifyGender === 'MALE' ? 'bg-[#7C3AED] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'
-                      }`}
-                    >
-                      남성
-                    </button>
-                    <button
-                      type="button"
-                      disabled={isOtpSent}
-                      onClick={() => setVerifyGender('FEMALE')}
-                      className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                        verifyGender === 'FEMALE' ? 'bg-[#7C3AED] text-white shadow-sm' : 'text-gray-500 hover:bg-gray-100'
-                      }`}
-                    >
-                      여성
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <div className="col-span-1">
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">통신사</label>
-                  <select
-                    value={verifyOperator}
-                    onChange={(e) => setVerifyOperator(e.target.value)}
-                    disabled={isOtpSent}
-                    className="w-full px-3 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none bg-white text-xs font-bold disabled:bg-gray-50"
-                  >
-                    <option value="SKT">SKT</option>
-                    <option value="KT">KT</option>
-                    <option value="LGU">LGU</option>
-                    <option value="SKT_MVNO">SKT 알뜰폰</option>
-                    <option value="KT_MVNO">KT 알뜰폰</option>
-                    <option value="LGU_MVNO">LGU 알뜰폰</option>
-                  </select>
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">휴대폰 번호</label>
-                  <input
-                    type="text"
-                    value={verifyPhone}
-                    onChange={(e) => setVerifyPhone(e.target.value)}
-                    disabled={isOtpSent}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-sm font-semibold disabled:bg-gray-50"
-                    placeholder="숫자만 입력"
-                    required
-                  />
-                </div>
-              </div>
-
-              {!isOtpSent && (
-                <button
-                  type="submit"
-                  disabled={isVerifying}
-                  className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold py-3.5 rounded-xl transition-all flex justify-center items-center cursor-pointer shadow-sm text-sm"
-                >
-                  {isVerifying ? <Loader2 className="animate-spin" size={20} /> : '인증번호 발송 요청'}
-                </button>
-              )}
-            </form>
-
-            {isOtpSent && (
-              <form onSubmit={handleConfirmOtp} className="space-y-4 pt-4 border-t border-gray-100 animate-fade-in">
-                <div>
-                  <div className="flex justify-between items-center mb-1.5">
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider">인증번호 입력</label>
-                    {verificationTimer > 0 && (
-                      <span className="text-red-500 font-extrabold text-sm">
-                        {Math.floor(verificationTimer / 60)}:{(verificationTimer % 60).toString().padStart(2, '0')}
-                      </span>
-                    )}
-                  </div>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      maxLength={6}
-                      value={verifyOtp}
-                      onChange={(e) => setVerifyOtp(e.target.value)}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-sm font-extrabold tracking-widest text-center"
-                      placeholder="6자리 숫자"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="flex space-x-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsOtpSent(false);
-                      setVerificationTimer(0);
-                      setVerifyOtp('');
-                    }}
-                    className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3 rounded-xl transition-colors cursor-pointer text-center text-sm"
-                  >
-                    이전으로
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isVerifying || verificationTimer <= 0}
-                    className="flex-1 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold py-3 rounded-xl transition-colors flex justify-center items-center cursor-pointer text-center text-sm disabled:bg-gray-300 disabled:cursor-not-allowed"
-                  >
-                    {isVerifying ? <Loader2 className="animate-spin" size={18} /> : '인증 완료'}
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {!isOtpSent && (
-              <button
-                type="button"
-                onClick={() => setIsVerifyModalOpen(false)}
-                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold py-3.5 rounded-xl transition-colors cursor-pointer text-center text-sm"
-              >
-                닫기
-              </button>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
