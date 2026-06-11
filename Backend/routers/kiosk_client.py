@@ -17,11 +17,22 @@ router = APIRouter()
 
 @router.get("/sync/{kiosk_id}", response_model=KioskSyncResponse, summary="키오스크 상품/카테고리 동기화")
 async def sync_kiosk(
-    kiosk_id: uuid.UUID,
+    kiosk_id: str,
     db: Session = Depends(get_db)
 ):
-    # 1. 키오스크 조회
-    kiosk = db.get(Kiosk, kiosk_id)
+    # 1. 키오스크 조회 (고유코드 또는 UUID)
+    kiosk = None
+    if len(kiosk_id) == 8:
+        stmt = select(Kiosk).where(Kiosk.code == kiosk_id)
+        kiosk = db.execute(stmt).scalars().first()
+        
+    if not kiosk:
+        try:
+            uuid_obj = uuid.UUID(kiosk_id)
+            kiosk = db.get(Kiosk, uuid_obj)
+        except ValueError:
+            pass
+            
     if not kiosk:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="등록되지 않은 키오스크 기기입니다")
     
@@ -36,17 +47,18 @@ async def sync_kiosk(
     
     cat_responses = []
     for cat in categories:
-        # 4. 각 카테고리에 귀속된 상품 리스트 조회 (sequence 오름차순 정렬)
-        prod_stmt = select(Product).where(Product.category_id == cat.id).order_by(Product.sequence.asc())
+        # 4. 각 카테고리에 귀속된 상품 리스트 조회 (is_active=True인 활성 상품만 노출, sequence 오름차순 정렬)
+        prod_stmt = select(Product).where(
+            Product.category_id == cat.id,
+            Product.is_active == True
+        ).order_by(Product.sequence.asc())
         products = db.execute(prod_stmt).scalars().all()
         
         prod_responses = []
         for prod in products:
             # 재고에 따른 상태 설정
             status_val = "ACTIVE"
-            if not prod.is_active:
-                status_val = "SOLDOUT"
-            elif prod.stock_managed and prod.stock <= 0:
+            if prod.stock_managed and prod.stock <= 0:
                 status_val = "SOLDOUT"
             elif prod.expiration_date and prod.expiration_date < datetime.now():
                 status_val = "SOLDOUT"
@@ -82,8 +94,19 @@ async def mock_payment(
     request: MockPaymentRequest,
     db: Session = Depends(get_db)
 ):
-    # 1. 키오스크 조회
-    kiosk = db.get(Kiosk, request.kiosk_id)
+    # 1. 키오스크 조회 (고유코드 또는 UUID)
+    kiosk = None
+    if len(request.kiosk_id) == 8:
+        stmt = select(Kiosk).where(Kiosk.code == request.kiosk_id)
+        kiosk = db.execute(stmt).scalars().first()
+        
+    if not kiosk:
+        try:
+            uuid_obj = uuid.UUID(request.kiosk_id)
+            kiosk = db.get(Kiosk, uuid_obj)
+        except ValueError:
+            pass
+            
     if not kiosk:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="키오스크를 찾을 수 없습니다")
     
@@ -98,7 +121,7 @@ async def mock_payment(
         current_date = datetime.now().strftime("%y%m%d")
         random_digits = "".join(random.choice("0123456789") for _ in range(6))
         order_no = current_date + random_digits
-
+ 
     # 3. 가상 승인번호 생성 (YYMMDD + 랜덤 6자리)
     approval_code = datetime.now().strftime("%y%m%d") + "".join(random.choice("0123456789") for _ in range(6))
     
@@ -106,7 +129,7 @@ async def mock_payment(
         # 4. 영수증 DB 적재
         new_order = Order(
             order_no=order_no,
-            kiosk_id=request.kiosk_id,
+            kiosk_id=kiosk.id,
             total_amount=request.total_amount,
             payment_method=request.payment_method,
             payment_provider=request.payment_provider,

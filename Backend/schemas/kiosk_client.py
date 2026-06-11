@@ -33,7 +33,7 @@ class KioskSyncResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class MockPaymentRequest(BaseModel):
-    kiosk_id: uuid.UUID
+    kiosk_id: str
     total_amount: int
     payment_method: str
     payment_provider: str = "MockProvider"

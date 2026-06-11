@@ -36,7 +36,7 @@ class KioskApp extends StatelessWidget {
 }
 
 // 가상 키오스크 상태 설정
-const String defaultKioskId = "88888888-8888-8888-8888-888888888888"; // 로컬 시뮬레이션용 ID
+const String defaultKioskId = "KS888888"; // 로컬 시뮬레이션용 ID
 
 String get backendUrl {
   if (kIsWeb) {
@@ -84,7 +84,6 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
   // API 동기화 데이터
   String _storeName = "모두의 키오스크";
   String _kioskType = "Restaurant"; // 기본형: 외식형(Restaurant)
-  String _storeId = "";
   List<dynamic> _categories = [];
   int _selectedCategoryIndex = 0;
   bool _isLoading = true;
@@ -124,8 +123,8 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
   void _resetInactivityTimer() {
     _inactivityTimer?.cancel();
     if (_isStarted) {
-      // 2분(120초) 동안 미조작 시 장바구니 초기화 후 대문화면 복귀
-      _inactivityTimer = Timer(const Duration(minutes: 2), () {
+      // 30초 동안 미조작 시 장바구니 초기화 후 대문화면 복귀
+      _inactivityTimer = Timer(const Duration(seconds: 30), () {
         if (mounted) {
           setState(() {
             _cart.clear();
@@ -181,14 +180,18 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
     });
 
     try {
-      // 1. 키오스크 상세 조회하여 store_id 및 type 확인
-      final kioskRes = await http.get(Uri.parse('$backendUrl/kiosks/$_kioskId'));
-      if (kioskRes.statusCode == 200) {
-        final kioskData = json.decode(kioskRes.body);
-        _kioskType = kioskData['type'] ?? 'Restaurant';
-        _storeId = kioskData['store_id'];
-      } else if (kioskRes.statusCode == 404 || kioskRes.statusCode == 403) {
-        // 기기가 데이터베이스에서 삭제되었거나 권한 오류 발생 시 로컬 캐시 초기화 및 온보딩 튕기기
+      // 카테고리 & 상품 리스트 동기화
+      final syncRes = await http.get(Uri.parse('$backendUrl/kiosk_client/sync/$_kioskId?t=${DateTime.now().millisecondsSinceEpoch}'));
+      if (syncRes.statusCode == 200) {
+        final syncData = json.decode(syncRes.body);
+        setState(() {
+          _storeName = syncData['store_name'];
+          _categories = syncData['categories'];
+          _kioskType = syncData['kiosk_type'] ?? 'Restaurant';
+          _isLoading = false;
+        });
+      } else if (syncRes.statusCode == 404) {
+        // 기기가 데이터베이스에서 삭제되었을 때 로컬 캐시 초기화 및 온보딩으로 복귀
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove('kiosk_id');
         setState(() {
@@ -196,22 +199,8 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
           _isStarted = false;
           _isLoading = false;
         });
-        return;
       } else {
         throw Exception("키오스크 정보를 읽을 수 없습니다.");
-      }
-
-      // 2. 카테고리 & 상품 리스트 동기화
-      final syncRes = await http.get(Uri.parse('$backendUrl/kiosk_client/sync/$_kioskId'));
-      if (syncRes.statusCode == 200) {
-        final syncData = json.decode(syncRes.body);
-        setState(() {
-          _storeName = syncData['store_name'];
-          _categories = syncData['categories'];
-          _isLoading = false;
-        });
-      } else {
-        throw Exception("동기화 API 호출 실패");
       }
     } catch (e) {
       // API 연결 자체가 아예 실패한 경우(오프라인 상태)에는 로컬 더미 데이터로 기동 (단, kioskId가 있는 경우에만 오프라인 모드 진입)
@@ -366,7 +355,6 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
           Uri.parse('$backendUrl/kiosk_client/pay/mock'),
           headers: {"Content-Type": "application/json"},
           body: json.encode({
-            "store_id": _storeId.isNotEmpty ? _storeId : "88888888-8888-8888-8888-888888888888",
             "kiosk_id": _kioskId,
             "total_amount": _getCartTotal(),
             "payment_method": "카드",
@@ -564,10 +552,11 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
                           border: Border(right: BorderSide(color: Color(0xffE5E7EB), width: 1.5)),
                         ),
                         child: ListView.builder(
-                          itemCount: _categories.length,
+                          itemCount: _categories.length + 1, // 전체상품 + 실제 카테고리 개수
                           itemBuilder: (context, index) {
-                            final cat = _categories[index];
                             final isSelected = index == _selectedCategoryIndex;
+                            final String catName = index == 0 ? "전체상품" : _categories[index - 1]['name'];
+                            
                             return InkWell(
                               onTap: () {
                                 setState(() {
@@ -588,7 +577,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
                                   ),
                                 ),
                                 child: Text(
-                                  cat['name'],
+                                  catName,
                                   style: TextStyle(
                                     fontSize: 22,
                                     fontWeight: isSelected ? FontWeight.w800 : FontWeight.bold,
@@ -608,99 +597,127 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
                             ? const Center(child: Loader2(animate: true))
                             : _categories.isEmpty
                                 ? const Center(child: Text("등록된 상품 카테고리가 없습니다.", style: TextStyle(fontSize: 20)))
-                                : GridView.builder(
-                                    padding: const EdgeInsets.all(24),
-                                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 2, // 시니어를 위한 2열 배치 극대화
-                                      childAspectRatio: 0.82,
-                                      crossAxisSpacing: 20,
-                                      mainAxisSpacing: 20,
-                                    ),
-                                    itemCount: _categories[_selectedCategoryIndex]['products'].length,
-                                    itemBuilder: (context, index) {
-                                      final product = _categories[_selectedCategoryIndex]['products'][index];
-                                      final isSoldOut = product['status'] == 'SOLDOUT';
+                                : Builder(
+                                    builder: (context) {
+                                      // 표시할 상품 리스트 결정
+                                      final List<dynamic> productsToShow = [];
+                                      if (_selectedCategoryIndex == 0) {
+                                        // 전체상품: 모든 카테고리의 상품을 통합 후 sequence 기준으로 정렬
+                                        for (var cat in _categories) {
+                                          productsToShow.addAll(cat['products'] ?? []);
+                                        }
+                                        productsToShow.sort((a, b) {
+                                          int seqA = a['sequence'] ?? 0;
+                                          int seqB = b['sequence'] ?? 0;
+                                          return seqA.compareTo(seqB);
+                                        });
+                                      } else {
+                                        // 개별 카테고리 상품 (인덱스 보정: _selectedCategoryIndex - 1)
+                                        final targetCatIdx = _selectedCategoryIndex - 1;
+                                        if (targetCatIdx < _categories.length) {
+                                          productsToShow.addAll(_categories[targetCatIdx]['products'] ?? []);
+                                        }
+                                      }
 
-                                      return InkWell(
-                                        onTap: () => _addToCart(product),
-                                        splashColor: const Color(0xff7C3AED).withOpacity(0.2), // 보라색 리플 효과
-                                        borderRadius: BorderRadius.circular(24),
-                                        child: Card(
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                                          color: Colors.white,
-                                          elevation: 2,
-                                          child: Stack(
-                                            children: [
-                                              Padding(
-                                                padding: const EdgeInsets.all(16.0),
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                                  children: [
-                                                    // 상품 이미지 플레이스홀더 (그레이 박스)
-                                                    Expanded(
-                                                      child: ClipRRect(
-                                                        borderRadius: BorderRadius.circular(16),
-                                                        child: product['image'] != null && product['image'].toString().isNotEmpty
-                                                            ? Image.network(
-                                                                product['image'].toString().startsWith('http')
-                                                                    ? product['image'].toString()
-                                                                    : '$backendUrl${product['image']}',
-                                                                fit: BoxFit.cover,
-                                                                errorBuilder: (context, error, stackTrace) {
-                                                                  return Container(
+                                      if (productsToShow.isEmpty) {
+                                        return const Center(child: Text("등록된 상품이 없습니다.", style: TextStyle(fontSize: 20)));
+                                      }
+
+                                      return GridView.builder(
+                                        padding: const EdgeInsets.all(24),
+                                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                          crossAxisCount: 2, // 시니어를 위한 2열 배치 극대화
+                                          childAspectRatio: 0.82,
+                                          crossAxisSpacing: 20,
+                                          mainAxisSpacing: 20,
+                                        ),
+                                        itemCount: productsToShow.length,
+                                        itemBuilder: (context, index) {
+                                          final product = productsToShow[index];
+                                          final isSoldOut = product['status'] == 'SOLDOUT';
+
+                                          return InkWell(
+                                            onTap: () => _addToCart(product),
+                                            splashColor: const Color(0xff7C3AED).withOpacity(0.2), // 보라색 리플 효과
+                                            borderRadius: BorderRadius.circular(24),
+                                            child: Card(
+                                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                                              color: Colors.white,
+                                              elevation: 2,
+                                              child: Stack(
+                                                children: [
+                                                  Padding(
+                                                    padding: const EdgeInsets.all(16.0),
+                                                    child: Column(
+                                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                                      children: [
+                                                        // 상품 이미지 플레이스홀더 (그레이 박스)
+                                                        Expanded(
+                                                          child: ClipRRect(
+                                                            borderRadius: BorderRadius.circular(16),
+                                                            child: product['image'] != null && product['image'].toString().isNotEmpty
+                                                                ? Image.network(
+                                                                    product['image'].toString().startsWith('http')
+                                                                        ? product['image'].toString()
+                                                                        : '$backendUrl${product['image']}',
+                                                                    fit: BoxFit.cover,
+                                                                    errorBuilder: (context, error, stackTrace) {
+                                                                      return Container(
+                                                                        color: const Color(0xffF3F4F6),
+                                                                        child: const Icon(
+                                                                          Icons.fastfood,
+                                                                          color: Colors.grey,
+                                                                          size: 54,
+                                                                        ),
+                                                                      );
+                                                                    },
+                                                                  )
+                                                                : Container(
                                                                     color: const Color(0xffF3F4F6),
                                                                     child: const Icon(
                                                                       Icons.fastfood,
                                                                       color: Colors.grey,
                                                                       size: 54,
                                                                     ),
-                                                                  );
-                                                                },
-                                                              )
-                                                            : Container(
-                                                                color: const Color(0xffF3F4F6),
-                                                                child: const Icon(
-                                                                  Icons.fastfood,
-                                                                  color: Colors.grey,
-                                                                  size: 54,
-                                                                ),
-                                                              ),
+                                                                  ),
+                                                          ),
+                                                        ),
+                                                        const SizedBox(height: 12),
+                                                        Text(
+                                                          product['name'],
+                                                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.black),
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                        const SizedBox(height: 6),
+                                                        Text(
+                                                          "₩${product['price'].toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}",
+                                                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xff7C3AED)),
+                                                        )
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  // 품절 오버레이
+                                                  if (isSoldOut)
+                                                    Container(
+                                                      decoration: BoxDecoration(
+                                                        color: Colors.black.withOpacity(0.6),
+                                                        borderRadius: BorderRadius.circular(24),
                                                       ),
-                                                    ),
-                                                    const SizedBox(height: 12),
-                                                    Text(
-                                                      product['name'],
-                                                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: Colors.black),
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
-                                                    ),
-                                                    const SizedBox(height: 6),
-                                                    Text(
-                                                      "₩${product['price'].toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}",
-                                                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Color(0xff7C3AED)),
+                                                      child: const Center(
+                                                        child: Text(
+                                                          "품 절",
+                                                          style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: 4),
+                                                        ),
+                                                      ),
                                                     )
-                                                  ],
-                                                ),
+                                                ],
                                               ),
-                                              // 품절 오버레이
-                                              if (isSoldOut)
-                                                Container(
-                                                  decoration: BoxDecoration(
-                                                    color: Colors.black.withOpacity(0.6),
-                                                    borderRadius: BorderRadius.circular(24),
-                                                  ),
-                                                  child: const Center(
-                                                    child: Text(
-                                                      "품 절",
-                                                      style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.w800, letterSpacing: 4),
-                                                    ),
-                                                  ),
-                                                )
-                                            ],
-                                          ),
-                                        ),
+                                            ),
+                                          );
+                                        },
                                       );
-                                    },
+                                    }
                                   ),
                       ),
                     ],
@@ -817,6 +834,25 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
                                 "결제하기",
                                 style: TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: 2),
                               ),
+                            ),
+                            const SizedBox(height: 8),
+                            OutlinedButton(
+                              onPressed: () {
+                                setState(() {
+                                  _cart.clear();
+                                  _isStarted = false;
+                                });
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.grey[700],
+                                side: BorderSide(color: Colors.grey[350]!, width: 1.5),
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                              child: const Text(
+                                "처음으로 (취소)",
+                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
                             )
                           ],
                         ),
@@ -836,8 +872,10 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
 Widget _buildWelcomeScreen() {
   return GestureDetector(
     onTap: () {
+      _syncKioskData(); // 터치 진입 시 실시간 상품 로딩
       setState(() {
         _isStarted = true;
+        _selectedCategoryIndex = 0; // 진입 시 항상 '전체상품' 기본 선택
       });
       _resetInactivityTimer();
     },
@@ -966,7 +1004,7 @@ Widget _buildWelcomeScreen() {
               const SizedBox(height: 8),
               const Center(
                 child: Text(
-                  "파트너센터에서 기기를 생성하고 발급받은\n키오스크 기기 ID(UUID)를 입력하여 활성화해 주세요.",
+                  "파트너센터에서 기기를 생성하고 발급받은\n키오스크 기기 고유코드를 입력하여 활성화해 주세요.",
                   style: TextStyle(
                     fontSize: 14,
                     color: Colors.grey,
@@ -980,9 +1018,9 @@ Widget _buildWelcomeScreen() {
                 controller: _kioskIdController,
                 style: const TextStyle(fontSize: 18, fontFamily: 'monospace'),
                 decoration: InputDecoration(
-                  labelText: "키오스크 기기 ID (UUID)",
+                  labelText: "키오스크 기기 고유코드",
                   labelStyle: const TextStyle(color: Colors.grey, fontWeight: FontWeight.bold),
-                  hintText: "예: 88888888-8888-8888-8888-888888888888",
+                  hintText: "예: KS888888 또는 KSNRH1UR",
                   prefixIcon: const Icon(Icons.vpn_key, color: Color(0xff7C3AED)),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -1031,7 +1069,7 @@ Widget _buildWelcomeScreen() {
               const SizedBox(height: 24),
               const Center(
                 child: Text(
-                  "기기 ID는 파트너센터의 [키오스크 관리] 메뉴에서 새 기기를 등록하여 발급받을 수 있습니다.",
+                  "기기 고유코드는 파트너센터의 [키오스크 관리] 메뉴에서 새 기기를 등록하여 발급받을 수 있습니다.",
                   style: TextStyle(
                     fontSize: 11,
                     color: Colors.amber,
@@ -1047,21 +1085,21 @@ Widget _buildWelcomeScreen() {
     );
   }
 
-  // 입력된 키오스크 기기 ID(UUID) 활성화 처리
+  // 입력된 키오스크 기기 고유코드 활성화 처리
   Future<void> _handleOnboardingActivate() async {
-    final inputId = _kioskIdController.text.trim();
+    final inputId = _kioskIdController.text.trim().toUpperCase();
 
     if (inputId.isEmpty) {
       setState(() {
-        _onboardingError = "키오스크 기기 ID(UUID)를 입력해 주세요.";
+        _onboardingError = "키오스크 기기 고유코드를 입력해 주세요.";
       });
       return;
     }
 
-    final uuidRegex = RegExp(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
-    if (!uuidRegex.hasMatch(inputId)) {
+    final codeRegex = RegExp(r'^[A-Z0-9]{8}$');
+    if (!codeRegex.hasMatch(inputId)) {
       setState(() {
-        _onboardingError = "올바른 UUID 형식(8-4-4-4-12 자리)이 아닙니다.";
+        _onboardingError = "올바른 고유코드 형식(8자리 대소문자/숫자)이 아닙니다.";
       });
       return;
     }
@@ -1072,13 +1110,13 @@ Widget _buildWelcomeScreen() {
     });
 
     try {
-      // 1. 해당 기기 ID로 백엔드 상품/매장명 동기화(Sync) API 호출
-      final syncRes = await http.get(Uri.parse('$backendUrl/kiosk_client/sync/$inputId'));
+      // 1. 해당 기기 고유코드로 백엔드 상품/매장명 동기화(Sync) API 호출
+      final syncRes = await http.get(Uri.parse('$backendUrl/kiosk_client/sync/$inputId?t=${DateTime.now().millisecondsSinceEpoch}'));
       
       if (syncRes.statusCode == 200) {
         final syncData = json.decode(syncRes.body);
         
-        // 2. SharedPreferences 로컬 기기 UUID 캐싱 저장
+        // 2. SharedPreferences 로컬 기기 고유코드 캐싱 저장
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('kiosk_id', inputId);
 
@@ -1088,13 +1126,14 @@ Widget _buildWelcomeScreen() {
           _categories = syncData['categories'];
           _kioskType = syncData['kiosk_type'] ?? 'Restaurant'; // 백엔드 동기화 응답으로 반환된 타입 자동 바인딩
           _isOnboardingSubmitting = false;
+          _isLoading = false;
         });
 
         _kioskIdController.clear();
         _showAlertDialog("기기 연동 성공", "[${syncData['store_name']}] 매장에 키오스크가 성공적으로 연결 및 활성화되었습니다!");
       } else if (syncRes.statusCode == 404) {
         setState(() {
-          _onboardingError = "등록되지 않은 키오스크 기기 ID입니다. 파트너센터에서 기기를 먼저 생성해 주세요.";
+          _onboardingError = "등록되지 않은 키오스크 기기 고유코드입니다. 파트너센터에서 기기를 먼저 생성해 주세요.";
           _isOnboardingSubmitting = false;
         });
       } else {

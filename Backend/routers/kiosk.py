@@ -169,12 +169,23 @@ async def read_my_kiosks(
 
 @router.get("/{kiosk_id}", response_model=KioskResponse, summary="키오스크 상세 조회")
 async def get_kiosk_detail(
-    kiosk_id: uuid.UUID,
+    kiosk_id: str,
     db: Session = Depends(get_db),
     current_user: UserInfo = Depends(require_roles(general_roles))
 ):
-    stmt = select(Kiosk).where(Kiosk.id == kiosk_id)
-    kiosk = db.execute(stmt).scalars().first()
+    kiosk = None
+    if len(kiosk_id) == 8:
+        stmt = select(Kiosk).where(Kiosk.code == kiosk_id)
+        kiosk = db.execute(stmt).scalars().first()
+        
+    if not kiosk:
+        try:
+            uuid_obj = uuid.UUID(kiosk_id)
+            stmt = select(Kiosk).where(Kiosk.id == uuid_obj)
+            kiosk = db.execute(stmt).scalars().first()
+        except ValueError:
+            pass
+            
     if not kiosk:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="키오스크를 찾을 수 없습니다")
     

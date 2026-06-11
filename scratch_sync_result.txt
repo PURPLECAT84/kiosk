@@ -1,0 +1,39 @@
+{
+  "status_code": 200,
+  "headers": {
+    "date": "Thu, 11 Jun 2026 02:34:31 GMT",
+    "server": "uvicorn",
+    "content-length": "397",
+    "content-type": "application/json"
+  },
+  "json": {
+    "store_name": "바니삭스옥정점",
+    "kiosk_type": "Store",
+    "categories": [
+      {
+        "id": 4,
+        "name": "음료",
+        "sequence": 0,
+        "products": [
+          {
+            "id": "4ad2f97f-1f7f-43d7-b26c-45b8ea7ab49c",
+            "category_id": 4,
+            "name": "포카리",
+            "price": 1000,
+            "image": "/static/images/0920ec89-236c-474e-bdf3-03f1b15c82c7.jpeg",
+            "stock": 24,
+            "is_active": true,
+            "sequence": 1,
+            "status": "ACTIVE"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "name": "스낵",
+        "sequence": 0,
+        "products": []
+      }
+    ]
+  }
+}
