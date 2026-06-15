@@ -24,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from database import engine, Base
-from routers import user, kiosk, kiosk_client, shelve, category, product, order, statistics, social_login, identity_verification, payment_subscription
+from routers import user, kiosk, kiosk_client, shelve, category, product, order, statistics, social_login, identity_verification, payment_subscription, payment_webhook
 
 # 1. DB 테이블 자동 생성
 # 앱이 시작될 때 models에 정의된 스키마를 바탕으로 DB에 테이블이 없으면 자동으로 생성해줍니다.
@@ -88,6 +88,7 @@ app.include_router(statistics.router, prefix="/dashboard", tags=["Dashboard"])
 app.include_router(social_login.auth_router) # prefix와 tags는 라우터 내부에서 정의됨
 app.include_router(identity_verification.router)
 app.include_router(payment_subscription.router)
+app.include_router(payment_webhook.router, prefix="/payments", tags=["Payments Webhook"])
 
 # 7. 루트 경로 처리 (프론트엔드 HTML 반환)
 @app.get("/")

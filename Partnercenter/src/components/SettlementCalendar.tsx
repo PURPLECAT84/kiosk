@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useKiosk } from '../context/KioskContext';
-import { Calendar, ChevronLeft, ChevronRight, Loader2, DollarSign, RefreshCcw } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Loader2, DollarSign, RefreshCcw, Download } from 'lucide-react';
 
 interface SettlementData {
   date: string;
@@ -16,7 +16,39 @@ export default function SettlementCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [settlements, setSettlements] = useState<Record<string, SettlementData>>({});
   const [isLoading, setIsLoading] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState('');
+
+  const handleDownloadCsv = async () => {
+    setIsDownloading(true);
+    try {
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${token}`
+      };
+      if (currentKioskId) {
+        headers['X-Kiosk-Id'] = currentKioskId;
+      }
+      const res = await fetch(`/dashboard/settlement/download?year=${year}&month=${month}`, {
+        headers
+      });
+      if (!res.ok) {
+        throw new Error('정산 파일 다운로드에 실패했습니다.');
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `moki_settlement_${year}_${String(month).padStart(2, '0')}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth() + 1; // 1-indexed
@@ -117,22 +149,38 @@ export default function SettlementCalendar() {
           <p className="text-xs text-gray-400 mt-1">일별 매출 합계와 환불액을 월간 캘린더 형식으로 확인합니다.</p>
         </div>
 
-        {/* 월 이동 컨트롤러 */}
-        <div className="flex items-center space-x-3 bg-gray-55 p-1 rounded-2xl border border-gray-100 shadow-sm self-center sm:self-auto">
-          <button 
-            onClick={handlePrevMonth}
-            className="p-2 hover:bg-gray-100 rounded-xl transition-colors text-gray-600 cursor-pointer"
+        {/* 월 이동 컨트롤러 및 다운로드 */}
+        <div className="flex items-center gap-3 self-center sm:self-auto">
+          <div className="flex items-center space-x-3 bg-gray-50 p-1 rounded-2xl border border-gray-100 shadow-sm">
+            <button 
+              onClick={handlePrevMonth}
+              className="p-2 hover:bg-gray-100 rounded-xl transition-colors text-gray-600 cursor-pointer"
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <span className="text-base font-extrabold text-gray-800 px-2 min-w-[100px] text-center">
+              {year}년 {month}월
+            </span>
+            <button 
+              onClick={handleNextMonth}
+              className="p-2 hover:bg-gray-100 rounded-xl transition-colors text-gray-600 cursor-pointer"
+            >
+              <ChevronRight size={20} />
+            </button>
+          </div>
+
+          <button
+            onClick={handleDownloadCsv}
+            disabled={isDownloading}
+            className="flex items-center gap-2 bg-[#7C3AED] hover:bg-[#6D28D9] text-white px-4 py-2.5 rounded-2xl text-sm font-bold shadow-sm transition-all cursor-pointer disabled:bg-purple-300 disabled:cursor-not-allowed"
+            title="당월 정산 데이터를 엑셀(CSV)로 내려받습니다."
           >
-            <ChevronLeft size={20} />
-          </button>
-          <span className="text-base font-extrabold text-gray-800 px-2 min-w-[100px] text-center">
-            {year}년 {month}월
-          </span>
-          <button 
-            onClick={handleNextMonth}
-            className="p-2 hover:bg-gray-100 rounded-xl transition-colors text-gray-600 cursor-pointer"
-          >
-            <ChevronRight size={20} />
+            {isDownloading ? (
+              <Loader2 className="animate-spin" size={16} />
+            ) : (
+              <Download size={16} />
+            )}
+            <span>엑셀 다운로드</span>
           </button>
         </div>
       </div>
