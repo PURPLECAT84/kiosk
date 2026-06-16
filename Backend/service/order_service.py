@@ -43,8 +43,17 @@ async def create_order_transaction(db: Session, order_data: OrderCreate) -> Orde
 
         # [1단계] 포트원 V2 결제 검증 (결제액 변조 방지)
         # 클라이언트가 전달한 approval_code 필드를 포트원의 payment_id로 취급하여 이중 검증합니다.
+        # 점주(MANAGER)가 소유한 가맹점 채널 식별값을 동적으로 넘깁니다.
         payment_id = order_data.approval_code
-        verified_payment = await verify_portone_payment(payment_id, order_data.total_amount)
+        store_id = getattr(kiosk.owner, "portone_store_id", None)
+        channel_key = getattr(kiosk.owner, "portone_channel_key", None)
+        
+        verified_payment = await verify_portone_payment(
+            payment_id=payment_id,
+            expected_amount=order_data.total_amount,
+            store_id=store_id,
+            channel_key=channel_key
+        )
 
         # [2단계] 주문번호(order_no) 결정 로직
         order_no = None
@@ -148,11 +157,13 @@ async def create_order_transaction(db: Session, order_data: OrderCreate) -> Orde
                 f"[보상 트랜잭션 실행] DB 적재 중 예외 발생하여 포트원 결제를 자동 취소합니다. "
                 f"결제 ID: {payment_id}, 취소 대상 금액: {order_data.total_amount}원, 원인: {str(e)}"
             )
-            # 포트원 API를 통해 취소 요청을 발송합니다.
+            # 포트원 API를 통해 점주의 PG 채널로 취소 요청을 발송합니다.
             cancel_success = await cancel_portone_payment(
                 payment_id=payment_id,
                 amount=order_data.total_amount,
-                reason="주문 DB 적재 실패로 인한 자동 환불"
+                reason="주문 DB 적재 실패로 인한 자동 환불",
+                store_id=store_id,
+                channel_key=channel_key
             )
             if not cancel_success:
                 logger.error(f"[보상 트랜잭션 실패] 결제 ID {payment_id} 환불 요청이 실패했습니다. 점주 수동 개입 필요!")

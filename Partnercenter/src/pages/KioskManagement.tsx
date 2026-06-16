@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useKiosk } from '../context/KioskContext';
-import { Monitor, Plus, Calendar, Loader2, CheckCircle2, ArrowRightCircle } from 'lucide-react';
+import { Monitor, Plus, Calendar, Loader2, CheckCircle2, ArrowRightCircle, CreditCard } from 'lucide-react';
 
 interface KioskItem {
   id: string;
@@ -44,6 +44,8 @@ export default function KioskManagement() {
   const [newKioskType, setNewKioskType] = useState('Store');
   const [newKioskStoreId, setNewKioskStoreId] = useState('');
   const [newKioskStatus, setNewKioskStatus] = useState('WAITING');
+  const [portoneStoreId, setPortoneStoreId] = useState('');
+  const [portoneChannelKey, setPortoneChannelKey] = useState('');
   const [isCreating, setIsCreating] = useState(false);
 
 
@@ -125,7 +127,9 @@ export default function KioskManagement() {
           model_name: newKioskModel,
           type: newKioskType,
           status: newKioskStatus,
-          user_id: newKioskStoreId
+          user_id: newKioskStoreId,
+          portone_store_id: portoneStoreId || null,
+          portone_channel_key: portoneChannelKey || null
         })
       });
       if (!res.ok) {
@@ -138,6 +142,8 @@ export default function KioskManagement() {
       setNewKioskModel('');
       setNewKioskType('Store');
       setNewKioskStatus('WAITING');
+      setPortoneStoreId('');
+      setPortoneChannelKey('');
       fetchData(); // 리스트 리프레시
     } catch (err: any) {
       alert(err.message);
@@ -207,7 +213,7 @@ export default function KioskManagement() {
           <h1 className="text-3xl font-bold text-gray-900 mb-1">키오스크 기기 관리</h1>
           <p className="text-gray-500 text-base">각 가맹점 매장의 키오스크 기기를 추가하고 상태를 조회합니다.</p>
         </div>
-        {(stores.length > 0 || user?.role === 'DEV' || user?.role === 'HEAD') && (
+        {['DEV', 'HEAD', 'MASTER'].includes(user?.role || '') && stores.length > 0 && (
           <button
             onClick={() => {
               setIsModalOpen(true);
@@ -246,13 +252,13 @@ export default function KioskManagement() {
                 <th className="px-6 py-4">가동 상태</th>
                 <th className="px-6 py-4">결제 상태</th>
                 <th className="px-6 py-4">다음 결제 예정일</th>
-                {(user?.role === 'DEV' || user?.role === 'HEAD') && <th className="px-6 py-4 text-center">작업</th>}
+                <th className="px-6 py-4 text-center">작업</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-gray-700">
               {filteredKiosks.length === 0 ? (
                 <tr>
-                  <td colSpan={(user?.role === 'DEV' || user?.role === 'HEAD') ? 10 : 9} className="text-center py-12 text-gray-400 font-medium">
+                  <td colSpan={10} className="text-center py-12 text-gray-400 font-medium">
                     {ownerFilter ? `[${ownerFilter}] 사장님의 등록된 키오스크 기기가 없습니다.` : '등록된 키오스크 기기가 없습니다.'}
                   </td>
                 </tr>
@@ -336,16 +342,24 @@ export default function KioskManagement() {
                         <span>{kiosk.next_payment_date ? new Date(kiosk.next_payment_date).toLocaleDateString() : '-'}</span>
                       </div>
                     </td>
-                    {(user?.role === 'DEV' || user?.role === 'HEAD') && (
-                      <td className="px-6 py-4 text-center">
+                    <td className="px-6 py-4 text-center">
+                      {['DEV', 'HEAD'].includes(user?.role || '') ? (
                         <button
                           onClick={(e) => handleDeleteKioskDirect(e, kiosk.id)}
                           className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer"
                         >
                           삭제
                         </button>
-                      </td>
-                    )}
+                      ) : (
+                        <button
+                          onClick={() => navigate(`/kiosks/${kiosk.id}`)}
+                          className="bg-purple-50 hover:bg-purple-100 border border-purple-200/50 text-[#7C3AED] px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 mx-auto"
+                        >
+                          <CreditCard size={12} />
+                          <span>사용료 결제</span>
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))
               )}
@@ -402,6 +416,28 @@ export default function KioskManagement() {
                   onChange={(e) => setNewKioskModel(e.target.value)}
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none"
                   placeholder="예: Samsung KM24A-21"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">포트원 Store ID (가맹점 식별 ID)</label>
+                <input
+                  type="text"
+                  value={portoneStoreId}
+                  onChange={(e) => setPortoneStoreId(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-sm font-semibold"
+                  placeholder="예: store-7cb871e1-4629-4eee-a422-e4fd672636c9"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">포트원 Channel Key (채널 키)</label>
+                <input
+                  type="text"
+                  value={portoneChannelKey}
+                  onChange={(e) => setPortoneChannelKey(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-sm font-semibold"
+                  placeholder="예: ch_xxxxxx"
                 />
               </div>
 

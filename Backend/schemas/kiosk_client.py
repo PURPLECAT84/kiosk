@@ -29,6 +29,8 @@ class KioskSyncResponse(BaseModel):
     store_name: str
     kiosk_type: str # 키오스크 UI 유형 (Restaurant: 외식형, Store: 일반판매형)
     categories: List[KioskCategoryResponse]
+    status: Optional[str] = None # 키오스크 가동 상태 (OPERATING, WAITING, WARNING 등)
+    next_payment_date: Optional[datetime] = None # 다음 결제 예정일 또는 유예 만료일
 
     model_config = ConfigDict(from_attributes=True)
 

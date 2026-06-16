@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useKiosk } from '../context/KioskContext';
-import { LayoutDashboard, Receipt, Package, Users, LogOut, Store, UserCircle, Monitor, ChevronDown, Play, CheckCircle2, Loader2 } from 'lucide-react';
+import { LayoutDashboard, Receipt, Package, Users, LogOut, Store, UserCircle, Monitor, ChevronDown, Play, CheckCircle2, Loader2, Layers } from 'lucide-react';
 import EmptyPage from './EmptyPage';
 import DashboardHome from './DashboardHome';
 import ProfilePage from './ProfilePage';
@@ -12,6 +12,7 @@ import OrdersPage from './OrdersPage';
 import ProductManagement from './ProductManagement';
 import UserManagement from './UserManagement';
 import CounterBoard from './CounterBoard';
+import BillingProductManagement from './BillingProductManagement';
 
 export default function Dashboard() {
   const { user, isLoading, logout, token, refreshUser } = useAuth();
@@ -337,6 +338,9 @@ export default function Dashboard() {
           {canAccessAdmin && (
             <NavItem to="/users" icon={Users} label="사용자 관리" />
           )}
+          {canAccessAdmin && (
+            <NavItem to="/billing-products" icon={Layers} label="이용료 관리" />
+          )}
         </div>
 
         {/* Sidebar Bottom: Active Kiosk Indicator and Dropdown */}
@@ -457,6 +461,10 @@ export default function Dashboard() {
             <Route 
               path="/users" 
               element={canAccessAdmin ? <UserManagement /> : <Navigate to="/" replace />} 
+            />
+            <Route 
+              path="/billing-products" 
+              element={canAccessAdmin ? <BillingProductManagement /> : <Navigate to="/" replace />} 
             />
             <Route path="/settings" element={<EmptyPage title="매장 설정" />} />
             <Route path="/profile" element={<React.Suspense fallback={<div>Loading...</div>}><ProfilePage /></React.Suspense>} />

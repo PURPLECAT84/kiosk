@@ -100,7 +100,9 @@ async def sync_kiosk(
     return KioskSyncResponse(
         store_name=store_name,
         kiosk_type=kiosk.type,
-        categories=cat_responses
+        categories=cat_responses,
+        status=kiosk.status,
+        next_payment_date=kiosk.next_payment_date
     )
 
 

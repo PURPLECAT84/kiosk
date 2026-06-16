@@ -48,6 +48,8 @@ class UserInfo(Base):
     # Enum 적용
     role: Mapped[UserRole] = mapped_column(default=UserRole.NONE) #권한
     status: Mapped[UserStatus] = mapped_column(default=UserStatus.PENDING) #상태
+    portone_store_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True) # 점주 개별 포트원 Store ID
+    portone_channel_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True) # 점주 개별 포트원 Channel Key
    
 
     # 관계 설정 (1:N)

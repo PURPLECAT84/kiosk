@@ -24,6 +24,8 @@ export interface User {
   is_business_verified?: boolean;
   is_identity_verified?: boolean;
   businesses?: BusinessInfo[];
+  portone_store_id?: string | null;
+  portone_channel_key?: string | null;
 }
 
 interface AuthContextType {

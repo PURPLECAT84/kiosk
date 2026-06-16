@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { ArrowLeft, Trash2, Edit, Calendar, ShieldCheck, Loader2 } from 'lucide-react';
+import { ArrowLeft, Trash2, Edit, Calendar, ShieldCheck, Loader2, CreditCard, Sparkles, Check, X, Layers } from 'lucide-react';
 
 interface KioskItem {
   id: string;
@@ -36,10 +36,51 @@ export default function KioskDetail() {
   // 삭제 진행 상태
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // 정기결제 진행 상태 및 핸들러
+  // 정기결제/단일결제 진행 상태 및 상품 선택 상태
   const [isSubscribing, setIsSubscribing] = useState(false);
+  const [billingProducts, setBillingProducts] = useState<any[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState<number | ''>('');
+  const [isOnetimeModalOpen, setIsOnetimeModalOpen] = useState(false);
+  const [isVerifyingOnetime, setIsVerifyingOnetime] = useState(false);
+
+  // 가상 결제창 카드 입력 정보 상태
+  const [cardNum, setCardNum] = useState('');
+  const [cardExpiry, setCardExpiry] = useState('');
+  const [cardCvc, setCardCvc] = useState('');
+
+  const fetchBillingProducts = async () => {
+    try {
+      const res = await fetch('/subscribe/products', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setBillingProducts(data);
+        if (data.length > 0) {
+          // 기본 선택값 설정 (노출 활성화된 상품 중 첫번째)
+          const firstActive = data.find((p: any) => p.is_active);
+          if (firstActive) {
+            setSelectedProductId(firstActive.id);
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch billing products:', err);
+    }
+  };
 
   const handleRegisterCard = async () => {
+    if (!selectedProductId) {
+      alert('연동할 요금제 상품을 선택해주세요.');
+      return;
+    }
+    const product = billingProducts.find(p => p.id === selectedProductId);
+    if (!product) return;
+    if (product.billing_type !== 'REGULAR') {
+      alert('정기 구독형 요금 상품이 아닙니다. 단일결제 버튼을 눌러주세요.');
+      return;
+    }
+
     setIsSubscribing(true);
     try {
       const res = await fetch('/subscribe/billing-key', {
@@ -50,19 +91,62 @@ export default function KioskDetail() {
         },
         body: JSON.stringify({
           kiosk_id: id,
-          customer_uid: `customer_${user?.id}_${id}`
+          customer_uid: `customer_${user?.id}_${id}`,
+          billing_product_id: product.id
         })
       });
       if (!res.ok) {
         const errData = await res.json();
         throw new Error(errData.detail || '정기결제 카드 연동에 실패했습니다.');
       }
-      alert('사용료 결제 카드가 정상 등록되었으며 기기가 활성화되었습니다!');
+      alert('사용료 정기 결제 카드가 정상 등록되었으며 기기가 활성화되었습니다!');
       fetchKioskData();
     } catch (err: any) {
       alert(err.message);
     } finally {
       setIsSubscribing(false);
+    }
+  };
+
+  const handleOnetimePayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProductId) return;
+    const product = billingProducts.find(p => p.id === selectedProductId);
+    if (!product) return;
+
+    setIsVerifyingOnetime(true);
+    try {
+      // 로컬 개발 환경용 랜덤 mock paymentId 생성
+      const mockPaymentId = 'pay_one_' + Math.random().toString(36).substring(2, 9) + Math.random().toString(36).substring(2, 9);
+      
+      const res = await fetch('/subscribe/onetime-verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          kiosk_id: id,
+          payment_id: mockPaymentId,
+          billing_product_id: product.id
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.detail || '단일결제 승인 검증에 실패했습니다.');
+      }
+      const resData = await res.json();
+      alert(resData.message || '단일결제가 성공적으로 승인 및 검증 완료되었습니다!');
+      setIsOnetimeModalOpen(false);
+      setCardNum('');
+      setCardExpiry('');
+      setCardCvc('');
+      fetchKioskData();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsVerifyingOnetime(false);
     }
   };
 
@@ -137,6 +221,7 @@ export default function KioskDetail() {
   useEffect(() => {
     fetchKioskData();
     fetchAdmins();
+    fetchBillingProducts();
   }, [id, token]);
 
   // 결제 정보 수정 제출 (PATCH)
@@ -395,19 +480,10 @@ export default function KioskDetail() {
             </button>
           </form>
         ) : (
-          <div className="space-y-6 max-w-lg">
-            {/* 구독 비용 안내 */}
-            <div className="bg-gray-50 border border-gray-100 rounded-2xl p-6 flex justify-between items-center">
-              <div>
-                <span className="text-gray-500 text-sm font-semibold block">기기당 가동 월 사용료</span>
-                <span className="text-2xl font-extrabold text-gray-900 mt-1 block">월 33,000 원 <span className="text-sm font-medium text-gray-400">(VAT 포함)</span></span>
-              </div>
-              <span className="bg-[#7C3AED]/10 text-[#7C3AED] text-xs font-bold px-3 py-1.5 rounded-full">자동결제 연동</span>
-            </div>
-
+          <div className="space-y-6 max-w-2xl">
             {/* 정기 결제 상태 카드 */}
             {kiosk.billing_key ? (
-              <div className="bg-green-50 border border-green-100 rounded-2xl p-6 space-y-4">
+              <div className="bg-green-50 border border-green-100 rounded-3xl p-6 space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-green-800 font-bold text-base flex items-center">
                     <span className="w-2.5 h-2.5 rounded-full bg-green-500 mr-2.5 animate-pulse" />
@@ -428,23 +504,104 @@ export default function KioskDetail() {
                 </button>
               </div>
             ) : (
-              <div className="bg-red-50 border border-red-100 rounded-2xl p-6 space-y-4">
+              <div className="bg-red-50 border border-red-100 rounded-3xl p-6 space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-red-800 font-bold text-base flex items-center">
-                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 mr-2.5" />
-                    사용료 결제대기 / 정지 상태
+                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 mr-2.5 animate-pulse" />
+                    사용료 결제 대기 / 정지 상태
                   </span>
+                  {kiosk.next_payment_date && (
+                    <span className="text-xs text-red-600 font-bold">만료일: {new Date(kiosk.next_payment_date).toLocaleDateString()}</span>
+                  )}
                 </div>
                 <p className="text-xs text-red-500 font-medium">
-                  현재 카드가 등록되지 않았거나 요금이 미납 상태입니다. 기기 연동 및 상품 동기화를 활성화하려면 아래 버튼을 눌러 정기 결제 카드를 등록해주세요.
+                  현재 카드가 등록되지 않았거나 요금이 미납 상태입니다. 기기 연동 및 상품 동기화를 활성화하려면 아래 요금제 상품 중 하나를 선택하여 결제를 진행해주세요.
                 </p>
-                <button
-                  onClick={handleRegisterCard}
-                  disabled={isSubscribing}
-                  className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold py-3.5 rounded-xl transition-all flex justify-center items-center cursor-pointer shadow-sm text-sm"
-                >
-                  {isSubscribing ? <Loader2 className="animate-spin" size={20} /> : '정기결제 카드 등록 및 활성화'}
-                </button>
+              </div>
+            )}
+
+            {/* 이용 요금제 상품 선택 리스트 */}
+            {!kiosk.billing_key && (
+              <div className="space-y-4">
+                <h4 className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
+                  <Layers size={16} className="text-[#7C3AED]" />
+                  이용 요금제 상품 선택
+                </h4>
+                
+                {billingProducts.length === 0 ? (
+                  <p className="text-xs text-gray-400 py-6 text-center border border-dashed border-gray-200 rounded-2xl">
+                    활성화된 본사 요금제 상품이 없습니다. 관리자에게 문의해 주세요.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {billingProducts.map((prod) => {
+                      if (!prod.is_active) return null;
+                      const isSelected = selectedProductId === prod.id;
+                      
+                      return (
+                        <div
+                          key={prod.id}
+                          onClick={() => setSelectedProductId(prod.id)}
+                          className={`p-5 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between space-y-3 relative ${
+                            isSelected 
+                              ? 'border-[#7C3AED] bg-purple-50/30' 
+                              : 'border-gray-200 bg-white hover:border-gray-300'
+                          }`}
+                        >
+                          {isSelected && (
+                            <span className="absolute top-4 right-4 bg-[#7C3AED] text-white p-0.5 rounded-full">
+                              <Check size={12} />
+                            </span>
+                          )}
+                          <div>
+                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-bold ${
+                              prod.billing_type === 'REGULAR' 
+                                ? 'bg-purple-100 text-[#7C3AED]' 
+                                : 'bg-blue-100 text-blue-600'
+                            }`}>
+                              {prod.billing_type === 'REGULAR' ? '정기결제 (구독)' : '단일결제 (1회권)'}
+                            </span>
+                            <h5 className="font-extrabold text-gray-900 mt-2 text-sm line-clamp-1">{prod.name}</h5>
+                            <p className="text-[10px] text-gray-400 mt-0.5">이용 기간: {prod.period_months}개월</p>
+                          </div>
+                          
+                          <div className="text-right">
+                            <span className="text-base font-extrabold text-gray-900">₩{prod.amount.toLocaleString()}</span>
+                            <span className="text-[10px] text-gray-400 font-medium"> / 총액</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* 선택한 상품에 따른 결제 버튼 */}
+                {selectedProductId && (
+                  <div className="pt-2">
+                    {billingProducts.find(p => p.id === selectedProductId)?.billing_type === 'REGULAR' ? (
+                      <button
+                        onClick={handleRegisterCard}
+                        disabled={isSubscribing}
+                        className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold py-3.5 rounded-xl transition-all flex justify-center items-center cursor-pointer shadow-sm text-sm"
+                      >
+                        {isSubscribing ? <Loader2 className="animate-spin" size={20} /> : '정기결제 카드 등록 및 활성화'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setCardNum('');
+                          setCardExpiry('');
+                          setCardCvc('');
+                          setIsOnetimeModalOpen(true);
+                        }}
+                        className="w-full bg-[#3B82F6] hover:bg-[#2563EB] text-white font-bold py-3.5 rounded-xl transition-all flex justify-center items-center cursor-pointer shadow-sm text-sm"
+                      >
+                        <CreditCard size={16} className="mr-2" />
+                        단일 결제 진행하기 (1회성)
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -599,6 +756,86 @@ export default function KioskDetail() {
                   className="flex-1 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold py-3 rounded-xl transition-colors flex justify-center items-center cursor-pointer"
                 >
                   {isAddingAdmin ? <Loader2 className="animate-spin" size={20} /> : '추가하기'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 💳 단일결제 가상 카드 입력 모달 */}
+      {isOnetimeModalOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-50 flex justify-center items-center p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-md w-full shadow-2xl border border-gray-100 space-y-6">
+            <div className="flex justify-between items-center">
+              <h3 className="text-2xl font-extrabold text-gray-900 flex items-center gap-2">
+                <Sparkles className="text-[#7C3AED]" size={22} />
+                단일결제 진행 (시뮬레이터)
+              </h3>
+              <button onClick={() => setIsOnetimeModalOpen(false)} className="p-1.5 hover:bg-gray-100 rounded-full cursor-pointer">
+                <X size={20} className="text-gray-500" />
+              </button>
+            </div>
+
+            <div className="bg-purple-50 text-[#7C3AED] p-4 rounded-2xl text-xs font-semibold space-y-1">
+              <p>📌 결제 예정 상품: <span className="font-extrabold">{billingProducts.find(p => p.id === selectedProductId)?.name}</span></p>
+              <p>💰 결제 금액: <span className="font-extrabold">₩{billingProducts.find(p => p.id === selectedProductId)?.amount.toLocaleString()}</span></p>
+            </div>
+
+            <form onSubmit={handleOnetimePayment} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">카드 번호</label>
+                <input
+                  type="text"
+                  value={cardNum}
+                  onChange={(e) => setCardNum(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-sm font-semibold"
+                  placeholder="xxxx-xxxx-xxxx-xxxx"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">유효기간</label>
+                  <input
+                    type="text"
+                    value={cardExpiry}
+                    onChange={(e) => setCardExpiry(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-sm font-semibold"
+                    placeholder="MM/YY"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase tracking-wider">CVC</label>
+                  <input
+                    type="password"
+                    maxLength={3}
+                    value={cardCvc}
+                    onChange={(e) => setCardCvc(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none text-sm font-semibold"
+                    placeholder="3자리"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="flex space-x-3 pt-4 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setIsOnetimeModalOpen(false)}
+                  className="flex-1 bg-gray-150 hover:bg-gray-200 text-gray-700 font-bold py-3.5 rounded-xl transition-colors cursor-pointer text-sm text-center"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={isVerifyingOnetime}
+                  className="flex-1 bg-[#3B82F6] hover:bg-[#2563EB] text-white font-bold py-3.5 rounded-xl transition-all flex justify-center items-center cursor-pointer shadow-md text-sm"
+                >
+                  {isVerifyingOnetime ? <Loader2 className="animate-spin" size={18} /> : '결제 승인 요청'}
                 </button>
               </div>
             </form>

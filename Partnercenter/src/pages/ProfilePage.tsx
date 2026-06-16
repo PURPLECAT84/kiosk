@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { User, Phone, Lock, KeyRound, Mail, CheckCircle2, ShieldAlert, Briefcase, Trash2, Plus, FileText, Loader2, Upload, X, Clock } from 'lucide-react';
+import { User, Phone, Lock, KeyRound, Mail, CheckCircle2, ShieldAlert, Briefcase, Trash2, Plus, FileText, Loader2, Upload, X, Clock, CreditCard } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user, token, refreshUser } = useAuth();
@@ -15,6 +15,12 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState('');
   const [newPasswordCheck, setNewPasswordCheck] = useState('');
   const [passwordMsg, setPasswordMsg] = useState({ text: '', type: '' });
+
+  // 포트원 연동 폼 상태
+  const [portoneStoreId, setPortoneStoreId] = useState(user?.portone_store_id || '');
+  const [portoneChannelKey, setPortoneChannelKey] = useState(user?.portone_channel_key || '');
+  const [isUpdatingPortone, setIsUpdatingPortone] = useState(false);
+  const [portoneMsg, setPortoneMsg] = useState({ text: '', type: '' });
 
   // 사업자 등록 상태
   const [bizNumber, setBizNumber] = useState('');
@@ -34,6 +40,34 @@ export default function ProfilePage() {
   const [deleteError, setDeleteError] = useState('');
   const [isDeletingUser, setIsDeletingUser] = useState(false);
   const { logout } = useAuth();
+
+  const handlePortoneSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUpdatingPortone(true);
+    setPortoneMsg({ text: '저장 중...', type: 'info' });
+    try {
+      const res = await fetch('/users/me', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          portone_store_id: portoneStoreId || null,
+          portone_channel_key: portoneChannelKey || null
+        })
+      });
+      if (!res.ok) throw new Error('포트원 연동 정보 수정에 실패했습니다.');
+      
+      setPortoneMsg({ text: '포트원 결제 연동 정보가 성공적으로 업데이트되었습니다.', type: 'success' });
+      await refreshUser();
+      setTimeout(() => setPortoneMsg({ text: '', type: '' }), 3000);
+    } catch (err: any) {
+      setPortoneMsg({ text: err.message, type: 'error' });
+    } finally {
+      setIsUpdatingPortone(false);
+    }
+  };
 
   if (!user) return null;
 
@@ -323,6 +357,57 @@ export default function ProfilePage() {
           </button>
         </form>
       </div>
+
+      {/* 💳 포트원 결제 연동 설정 카드 (점주용) */}
+      {user.role === 'MANAGER' && (
+        <div className="bg-white rounded-2xl shadow-sm p-8">
+          <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center">
+            <CreditCard className="mr-2 text-[#7C3AED]" /> 포트원 결제 연동 설정 (매장 결제용)
+          </h3>
+          <p className="text-gray-500 text-sm mb-6">
+            매장 키오스크에서 고객들이 결제할 때 사용할 점주님의 포트원(PortOne) 가맹점 정보를 입력해 주세요.<br />
+            해당 정보가 연동되어야 키오스크에서 실제 카드 결제가 정상적으로 승인/취소 처리됩니다.
+          </p>
+          <form onSubmit={handlePortoneSubmit} className="space-y-6 max-w-lg">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">포트원 Store ID (가맹점 식별 ID)</label>
+              <input
+                type="text"
+                value={portoneStoreId}
+                onChange={(e) => setPortoneStoreId(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none font-semibold"
+                placeholder="예: store-xxxxxx"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">포트원 Channel Key (채널 키)</label>
+              <input
+                type="text"
+                value={portoneChannelKey}
+                onChange={(e) => setPortoneChannelKey(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-[#7C3AED] focus:border-[#7C3AED] outline-none font-semibold"
+                placeholder="예: ch_xxxxxx"
+              />
+            </div>
+            
+            {portoneMsg.text && (
+              <p className={`text-sm font-semibold ${
+                portoneMsg.type === 'error' ? 'text-red-500' : 'text-green-500'
+              }`}>
+                {portoneMsg.text}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={isUpdatingPortone}
+              className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold py-3 rounded-xl transition-all flex justify-center items-center cursor-pointer shadow-sm text-sm"
+            >
+              {isUpdatingPortone ? <Loader2 className="animate-spin" size={20} /> : '포트원 연동 정보 저장하기'}
+            </button>
+          </form>
+        </div>
+      )}
 
       {/* 비밀번호 변경 카드 (소셜 계정일 경우 숨김 처리 - 옵션 A 적용) */}
       {user.login_provider === 'email' || !user.login_provider ? (

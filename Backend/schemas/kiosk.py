@@ -8,6 +8,8 @@ class KioskCreate(BaseModel):
     type: str = "Store" # Store / Restaurant
     status: str = "WAITING" # OPERATING / WAITING
     user_id: uuid.UUID
+    portone_store_id: str | None = None
+    portone_channel_key: str | None = None
 
 class KioskUpdate(BaseModel):
     name: str | None = None

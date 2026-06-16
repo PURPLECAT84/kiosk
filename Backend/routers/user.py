@@ -141,8 +141,10 @@ async def update_user_profile(
     db: Session = Depends(get_db), 
     current_user: UserInfo = Depends(get_current_user) # 🔒 권한 검사
 ):
-    if body.name: current_user.name = body.name
-    if body.phone: current_user.phone = body.phone
+    if body.name is not None: current_user.name = body.name
+    if body.phone is not None: current_user.phone = body.phone
+    if body.portone_store_id is not None: current_user.portone_store_id = body.portone_store_id
+    if body.portone_channel_key is not None: current_user.portone_channel_key = body.portone_channel_key
 
     db.commit()
     db.refresh(current_user)

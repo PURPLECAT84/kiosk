@@ -100,6 +100,26 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
   bool _isPaymentProcessing = false;
   Timer? _inactivityTimer;
 
+  // 키오스크 서비스 이용료 라이선스 상태 필드
+  String? _kioskStatus;
+  String? _nextPaymentDate;
+
+  String _getWarningMessage() {
+    if (_nextPaymentDate == null) return "결제 연체 상태입니다. 사용이 곧 중단됩니다.";
+    try {
+      final expiry = DateTime.parse(_nextPaymentDate!);
+      final difference = expiry.difference(DateTime.now());
+      if (difference.isNegative) {
+        return "결제 유예 기간이 만료되었습니다. 사용이 곧 중단됩니다.";
+      }
+      final hours = difference.inHours;
+      final minutes = difference.inMinutes % 60;
+      return "$hours시간 $minutes분 후 사용이 중단됩니다. (결제 연체)";
+    } catch (e) {
+      return "결제 연체 상태입니다. 사용이 곧 중단됩니다.";
+    }
+  }
+
   // 디바이스 온보딩(매핑) 관련 로컬 상태 변수들
   String? _kioskId;
   bool _isLocalLoading = true;
@@ -213,6 +233,8 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
           _storeName = syncData['store_name'];
           _categories = syncData['categories'];
           _kioskType = syncData['kiosk_type'] ?? 'Restaurant';
+          _kioskStatus = syncData['status'];
+          _nextPaymentDate = syncData['next_payment_date'];
           _isPaymentRequired = false;
           _isSuspended = false;
           _isLoading = false;
@@ -798,6 +820,23 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
 
             return Column(
               children: [
+                if (_kioskStatus == "WARNING")
+                  Container(
+                    width: double.infinity,
+                    color: Colors.amber[800],
+                    padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          _getWarningMessage(),
+                          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
                 // 1. 상단 (15%): 매장명, 시간, 안내문구
                 Container(
                   height: headerHeight,
@@ -1183,7 +1222,7 @@ class _KioskHomeScreenState extends State<KioskHomeScreen> {
 }
 
 Widget _buildWelcomeScreen() {
-  return GestureDetector(
+  final mainContent = GestureDetector(
     onTap: () {
       _syncKioskData(); // 터치 진입 시 실시간 상품 로딩
       setState(() {
@@ -1273,6 +1312,37 @@ Widget _buildWelcomeScreen() {
       ),
     ),
   );
+
+  if (_kioskStatus == "WARNING") {
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          color: Colors.amber[800],
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          child: SafeArea(
+            bottom: false,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 24),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _getWarningMessage(),
+                    style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Expanded(child: mainContent),
+      ],
+    );
+  }
+  return mainContent;
 }
 
   // 온보딩 기기 활성화 UI 렌더링

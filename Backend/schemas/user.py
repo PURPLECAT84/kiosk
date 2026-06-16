@@ -24,6 +24,8 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     name: str | None = None # 이름
     phone: str | None = None # 전화번호
+    portone_store_id: str | None = None # 점주 개별 포트원 Store ID
+    portone_channel_key: str | None = None # 점주 개별 포트원 Channel Key
 
 class UserPasswordUpdate(BaseModel):
     current_password: str = Field(..., description="현재 비밀번호")
@@ -93,6 +95,8 @@ class UserResponse(BaseModel):
     created_at : datetime # 가입일, 서버시간 기준
     login_provider: str | None = "email" # 이메일, 카카오, 구글 등 현재 로그인 수단
     businesses: List[BusinessInfoResponse] = [] # 등록된 사업자 목록
+    portone_store_id: str | None = None # 점주 개별 포트원 Store ID
+    portone_channel_key: str | None = None # 점주 개별 포트원 Channel Key
 
     model_config = ConfigDict(from_attributes = True) # SQLAlchemy 모델(DB 객체)을 Pydantic 모델로 변환 허용
 
@@ -142,5 +146,7 @@ class UserManagementResponse(BaseModel):
     store_names_summary: str = Field(..., description="소유 매장명 요약 정보 (예: '모키반점 외 2개')")
     kiosks_summary: UserManagementKioskSummary = Field(..., description="운영 중인 키오스크 현황 (활성/미활성 개수)")
     businesses: List[BusinessInfoResponse] = [] # 등록된 사업자 목록
+    portone_store_id: str | None = None # 점주 개별 포트원 Store ID
+    portone_channel_key: str | None = None # 점주 개별 포트원 Channel Key
 
     model_config = ConfigDict(from_attributes = True)

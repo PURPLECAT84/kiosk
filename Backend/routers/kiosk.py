@@ -28,11 +28,13 @@ def generate_kiosk_code(db: Session) -> str:
         if not db.execute(stmt).scalars().first():
             return code
 
+creator_roles = [UserRole.DEV, UserRole.HEAD, UserRole.MASTER]
+
 @router.post("/", response_model=KioskResponse, status_code=status.HTTP_201_CREATED, summary="키오스크 생성")
 async def create_kiosk(
     kiosk: KioskCreate,
     db: Session = Depends(get_db),
-    current_user: UserInfo = Depends(require_roles(general_roles))
+    current_user: UserInfo = Depends(require_roles(creator_roles))
 ):
     # 점주 존재 여부 검증
     owner_stmt = select(UserInfo).where(UserInfo.id == kiosk.user_id)
@@ -40,6 +42,12 @@ async def create_kiosk(
     if not owner:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="점주(사용자)를 찾을 수 없습니다")
     
+    # 포트원 결제 연동 설정 저장/갱신
+    if kiosk.portone_store_id is not None:
+        owner.portone_store_id = kiosk.portone_store_id
+    if kiosk.portone_channel_key is not None:
+        owner.portone_channel_key = kiosk.portone_channel_key
+        
     store_name = "미지정 매장"
     if owner.businesses:
         store_name = owner.businesses[0].store_name

@@ -184,4 +184,27 @@ with engine.connect() as conn:
         conn.rollback()
         print("Error applying Storage RLS policies:", e)
 
+    # 10. user_info 테이블에 portone_store_id 및 portone_channel_key 컬럼 추가
+    try:
+        conn.execute(text("ALTER TABLE user_info ADD COLUMN portone_store_id VARCHAR(255);"))
+        conn.commit()
+        print("Added 'portone_store_id' column to 'user_info' table.")
+    except Exception as e:
+        conn.rollback()
+        if "already exists" in str(e):
+            print("'portone_store_id' column already exists in 'user_info'.")
+        else:
+            print("Error adding 'portone_store_id':", e)
+
+    try:
+        conn.execute(text("ALTER TABLE user_info ADD COLUMN portone_channel_key VARCHAR(255);"))
+        conn.commit()
+        print("Added 'portone_channel_key' column to 'user_info' table.")
+    except Exception as e:
+        conn.rollback()
+        if "already exists" in str(e):
+            print("'portone_channel_key' column already exists in 'user_info'.")
+        else:
+            print("Error adding 'portone_channel_key':", e)
+
 print("DB patching complete.")
