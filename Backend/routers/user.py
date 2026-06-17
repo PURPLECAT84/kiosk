@@ -351,6 +351,86 @@ async def delete_business_info(
     return current_user
 
 
+@router.put("/me/business/{business_id}", response_model=UserResponse, summary="사업자 등록 정보 수정")
+async def update_business_info(
+    business_id: int,
+    body: BusinessInfoCreate,
+    db: Session = Depends(get_db),
+    current_user: UserInfo = Depends(get_current_user)
+):
+    """
+    [초보자용 교보재 지침 - 사업자 수정]
+    점주가 등록한 사업자 정보를 수정합니다. 수정 시 보안을 위해 승인 여부(is_verified)가 초기화됩니다.
+    """
+    if current_user.role == UserRole.STAFF:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="스태프 권한은 사업자 정보를 수정할 수 없습니다."
+        )
+
+    from models.user import BusinessInfo
+
+    # 1. 대상 사업자 정보 조회
+    stmt = select(BusinessInfo).where(BusinessInfo.id == business_id)
+    business = db.execute(stmt).scalars().first()
+    if not business:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="사업자 정보를 찾을 수 없습니다."
+        )
+
+    if business.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="본인의 사업자 정보만 수정할 수 있습니다."
+        )
+
+    # 2. 중복 사업자 등록번호 검증
+    if business.business_number != body.business_number:
+        stmt_num = select(BusinessInfo).where(BusinessInfo.business_number == body.business_number)
+        existing_num = db.execute(stmt_num).scalars().first()
+        if existing_num:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="이미 등록된 사업자 등록번호입니다."
+            )
+
+    # 3. 중복 매장명 검증
+    if business.store_name != body.store_name:
+        stmt_store = select(BusinessInfo).where(BusinessInfo.store_name == body.store_name)
+        existing_store = db.execute(stmt_store).scalars().first()
+        if existing_store:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="이미 존재하는 매장명입니다. 다른 매장명을 사용해주세요."
+            )
+
+    # 4. 정보 수정 및 저장 (수정 시 재심사가 필요하므로 승인 상태를 해제합니다)
+    business.business_number = body.business_number
+    business.business_name = body.business_name
+    business.representative_name = body.representative_name
+    business.representative_phone = body.representative_phone
+    business.store_name = body.store_name
+    if body.document_url:
+        business.document_url = body.document_url
+        
+    business.is_verified = False
+
+    # 다른 사업자 정보 중 승인된 것이 있는지 확인
+    has_any_verified = False
+    for b in current_user.businesses:
+        if b.id != business.id and b.is_verified:
+            has_any_verified = True
+            break
+            
+    if not has_any_verified:
+        current_user.is_business_verified = False
+
+    db.commit()
+    db.refresh(current_user)
+    return current_user
+
+
 @router.patch("/{user_id}/verify-business", response_model=UserResponse, summary="사업자 승인 및 심사 (관리자 전용)")
 async def verify_business(
     user_id: uuid.UUID,

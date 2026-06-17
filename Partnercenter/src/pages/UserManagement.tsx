@@ -31,7 +31,7 @@ export default function UserManagement() {
   const fetchUsers = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/users/', {
+      const res = await fetch(`/users/?t=${Date.now()}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

@@ -23,7 +23,7 @@ interface Order {
 
 export default function CounterBoard() {
   const { token } = useAuth();
-  const { currentKioskId, currentKioskName } = useKiosk();
+  const { currentKioskId, currentKioskName, myKiosks } = useKiosk();
   
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -34,7 +34,7 @@ export default function CounterBoard() {
     if (!currentKioskId) return;
     setIsLoading(true);
     try {
-      const res = await fetch(`/order/?kiosk_id=${currentKioskId}`, {
+      const res = await fetch(`/order/?kiosk_id=${currentKioskId}&is_kitchen=true`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'X-Kiosk-Id': currentKioskId
@@ -96,6 +96,28 @@ export default function CounterBoard() {
             <h3 className="text-xl font-bold">활성 키오스크 미선택</h3>
             <p className="text-sm text-slate-400">
               주방 오더 보드를 사용하려면 왼쪽 하단에서 관리할 키오스크 기기를 먼저 선택해 주세요.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const activeKiosk = myKiosks.find(k => k.id === currentKioskId);
+  const isRestaurant = activeKiosk ? activeKiosk.type === 'Restaurant' : false;
+
+  if (!isRestaurant) {
+    return (
+      <div className="flex-grow p-8 flex flex-col justify-center items-center h-full bg-[#0F172A] text-white">
+        <div className="bg-[#1E293B] p-8 rounded-3xl border border-slate-800 text-center max-w-md space-y-6 shadow-2xl">
+          <div className="w-16 h-16 bg-red-500/20 text-red-500 rounded-full flex justify-center items-center mx-auto">
+            <AlertTriangle size={32} />
+          </div>
+          <div className="space-y-2">
+            <h3 className="text-xl font-bold">주방 오더 보드 활성화 불가</h3>
+            <p className="text-sm text-slate-400">
+              현재 선택된 키오스크 <strong className="text-[#7C3AED]">[{currentKioskName}]</strong>은 <strong>판매형(Store)</strong> 기기입니다.<br />
+              주방 오더 보드는 <strong>외식형(Restaurant)</strong> 키오스크 기기만 이용 가능합니다.
             </p>
           </div>
         </div>

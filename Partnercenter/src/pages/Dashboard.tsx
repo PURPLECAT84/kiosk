@@ -291,6 +291,7 @@ export default function Dashboard() {
   // 권한별 사이드바 메뉴 가시성 체크
   const canAccessAdmin = ['DEV', 'HEAD', 'MASTER'].includes(user.role);
   const canAccessKiosk = ['DEV', 'HEAD', 'MASTER', 'MANAGER'].includes(user.role);
+  const hasRestaurantKiosk = myKiosks.some(k => k.type === 'Restaurant') || user.role === 'DEV' || user.role === 'HEAD';
 
   const NavItem = ({ to, icon: Icon, label }: { to: string, icon: any, label: string }) => {
     const isActive = location.pathname.startsWith(to) && (to !== '/' || location.pathname === '/');
@@ -331,7 +332,7 @@ export default function Dashboard() {
           )}
 
           <NavItem to="/orders" icon={Receipt} label="주문 내역" />
-          {canAccessKiosk && (
+          {canAccessKiosk && hasRestaurantKiosk && (
             <NavItem to="/counter-board" icon={Play} label="주방 오더 보드" />
           )}
           <NavItem to="/products" icon={Package} label="상품 관리" />
@@ -418,14 +419,30 @@ export default function Dashboard() {
             <div className="bg-gray-100 px-4 py-2 rounded-full text-sm font-bold text-gray-600">
               {user.role} 권한으로 접속중
             </div>
-            <Link 
-              to="/profile" 
-              className="flex items-center space-x-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
-              title="내 정보"
-            >
-              <UserCircle size={24} />
-              <span className="text-sm font-bold text-gray-700">{user.name}</span>
-            </Link>
+            <div className="relative flex items-center">
+              <Link 
+                to="/profile" 
+                className="flex items-center space-x-2 px-3 py-2 text-gray-600 hover:bg-gray-100 rounded-full transition-colors cursor-pointer"
+                title="내 정보"
+              >
+                <UserCircle size={24} />
+                <span className="text-sm font-bold text-gray-700">{user.name}</span>
+              </Link>
+              
+              {/* 사업자 정보 업데이트 유도 말풍선 */}
+              {(user.role === 'NONE' || user.role === 'MANAGER') && (!user.businesses || user.businesses.length === 0) && (
+                <div className="absolute right-0 top-full mt-2 w-64 bg-amber-50 border border-amber-200 text-amber-850 text-xs rounded-xl p-3 shadow-lg z-30 animate-bounce">
+                  <div className="font-bold mb-1 flex items-center gap-1.5 text-amber-900">
+                    <span className="inline-block w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+                    사업자 정보 등록 필요
+                  </div>
+                  <p className="text-gray-600 leading-relaxed font-medium">
+                    키오스크 개설 및 서비스 활성화를 위해 마이페이지에서 <strong>사업자 정보를 업데이트</strong>해 주세요.
+                  </p>
+                  <div className="absolute -top-1.5 right-6 w-3 h-3 bg-amber-50 border-t border-l border-amber-200 rotate-45" />
+                </div>
+              )}
+            </div>
             <button
               onClick={logout}
               className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors flex items-center justify-center cursor-pointer"
@@ -455,7 +472,7 @@ export default function Dashboard() {
             <Route path="/orders" element={<OrdersPage />} />
             <Route 
               path="/counter-board" 
-              element={canAccessKiosk ? <CounterBoard /> : <Navigate to="/" replace />} 
+              element={(canAccessKiosk && hasRestaurantKiosk) ? <CounterBoard /> : <Navigate to="/" replace />} 
             />
             <Route path="/products" element={<ProductManagement />} />
             <Route 

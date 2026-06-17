@@ -50,8 +50,27 @@ async def send_identity_verification(
     """
     try:
         # [모킹 동작]
+        # 0. 회원가입 시 입력한 실명 및 전화번호 일치 검증
+        # 📝 [초보자를 위한 멘토링 주석]
+        # 타인의 명의로 불법 본인인증을 시도하는 것을 막기 위해,
+        # 회원가입 시 등록된 이름/전화번호가 본인인증 시 입력한 값과 일치하는지 비교합니다.
+        clean_user_phone = "".join(c for c in current_user.phone if c.isdigit())
+        clean_req_phone = "".join(c for c in request.phone if c.isdigit())
+        
+        if current_user.name != request.name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="가입된 회원명과 본인인증 이름이 일치하지 않습니다."
+            )
+            
+        if clean_user_phone != clean_req_phone:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="가입된 전화번호와 본인인증 전화번호가 일치하지 않습니다."
+            )
+
         # 전화번호 포맷 정규화
-        clean_phone = "".join(c for c in request.phone if c.isdigit())
+        clean_phone = clean_req_phone
         if len(clean_phone) < 10 or len(clean_phone) > 11:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

@@ -84,6 +84,7 @@ async def get_orders(
     start_date: datetime | None = None,
     end_date: datetime | None = None,
     x_kiosk_id: Optional[uuid.UUID] = Header(None, alias="X-Kiosk-Id"),
+    is_kitchen: bool = False,
     db: Session = Depends(get_db),
     current_user: UserInfo = Depends(get_current_user)
 ):
@@ -95,9 +96,26 @@ async def get_orders(
     if current_user.role not in [UserRole.DEV, UserRole.HEAD, UserRole.MASTER] and target_kiosk.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="본인 키오스크의 매출 내역만 조회할 수 있습니다.")
     
-    stmt = select(Order).where(Order.kiosk_id == kiosk_id)
-    if x_kiosk_id:
-        stmt = stmt.where(Order.kiosk_id == x_kiosk_id)
+    # 주방 오더보드 전용 조회인 경우
+    if is_kitchen:
+        # [수정] 주방 오더보드는 '외식형' 일 때만 활성화 가능하도록 제한
+        if target_kiosk.type != "Restaurant":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, 
+                detail="주방 오더보드는 외식형(Restaurant) 키오스크만 사용 가능합니다."
+            )
+            
+        # [수정] 동일 매장(동일 점주) 내의 모든 '외식형' 키오스크들의 주문 통합 조회
+        kiosks_stmt = select(Kiosk).where(Kiosk.user_id == target_kiosk.user_id)
+        owner_kiosks = db.execute(kiosks_stmt).scalars().all()
+        
+        restaurant_kiosk_ids = [k.id for k in owner_kiosks if k.type == "Restaurant"]
+        
+        stmt = select(Order).where(Order.kiosk_id.in_(restaurant_kiosk_ids))
+    else:
+        stmt = select(Order).where(Order.kiosk_id == kiosk_id)
+        if x_kiosk_id:
+            stmt = stmt.where(Order.kiosk_id == x_kiosk_id)
 
     if start_date:
         stmt = stmt.where(Order.created_date >= start_date)

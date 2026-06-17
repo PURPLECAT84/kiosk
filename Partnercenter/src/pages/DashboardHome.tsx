@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useKiosk } from '../context/KioskContext';
-import { Monitor, LayoutDashboard, Loader2, ArrowRight, RefreshCw, CreditCard, Receipt, TrendingUp, BarChart3 } from 'lucide-react';
+import { Monitor, LayoutDashboard, Loader2, ArrowRight, RefreshCw, CreditCard, Receipt, TrendingUp, BarChart3, ShieldAlert } from 'lucide-react';
 import SettlementCalendar from '../components/SettlementCalendar';
 
 interface KioskItem {
@@ -124,6 +124,17 @@ export default function DashboardHome() {
           MOKI 키오스크 시스템 통합 대시보드 홈입니다.
         </p>
       </div>
+
+      {/* 결제 대기 경고 배너 */}
+      {kiosks.some(k => k.payment_status === 'UNPAID') && (
+        <div className="bg-red-50 border border-red-200 text-red-800 px-5 py-4 rounded-3xl flex items-center space-x-3 shadow-sm animate-pulse">
+          <ShieldAlert className="text-red-500" size={24} />
+          <div>
+            <p className="font-bold text-sm">결제 필요 안내</p>
+            <p className="text-xs text-red-600 font-medium mt-0.5">키오스크 사용을 위해서는 결제가 필요합니다. 키오스크 관리 페이지 또는 상세 화면에서 결제를 진행해 주세요.</p>
+          </div>
+        </div>
+      )}
 
       {/* 요약 카드 */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

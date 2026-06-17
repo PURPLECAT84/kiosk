@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { User, Phone, Lock, KeyRound, Mail, CheckCircle2, ShieldAlert, Briefcase, Trash2, Plus, FileText, Loader2, Upload, X, Clock, CreditCard } from 'lucide-react';
+import { User, Phone, Lock, KeyRound, Mail, CheckCircle2, ShieldAlert, Briefcase, Trash2, Plus, FileText, Loader2, Upload, X, Clock, CreditCard, Pencil } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user, token, refreshUser } = useAuth();
@@ -33,6 +33,7 @@ export default function ProfilePage() {
   const [bizError, setBizError] = useState('');
   const [bizSuccess, setBizSuccess] = useState('');
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [editingBizId, setEditingBizId] = useState<number | null>(null);
   
   // 회원 탈퇴 모달 관련 상태
   const [isDeleteUserOpen, setIsDeleteUserOpen] = useState(false);
@@ -195,6 +196,30 @@ export default function ProfilePage() {
     }
   };
 
+  const startEditBiz = (biz: any) => {
+    setEditingBizId(biz.id);
+    setBizNumber(biz.business_number);
+    setBizName(biz.business_name);
+    setRepName(biz.representative_name);
+    setRepPhone(biz.representative_phone || '');
+    setStoreName(biz.store_name);
+    setDocUrl(biz.document_url || '');
+    setBizError('');
+    setBizSuccess('');
+  };
+
+  const cancelEditBiz = () => {
+    setEditingBizId(null);
+    setBizNumber('');
+    setBizName('');
+    setRepName(user?.name || '');
+    setRepPhone(user?.phone || '');
+    setStoreName('');
+    setDocUrl('');
+    setBizError('');
+    setBizSuccess('');
+  };
+
   const handleBizSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBizError('');
@@ -212,8 +237,10 @@ export default function ProfilePage() {
     }
 
     try {
-      const res = await fetch('/users/me/business', {
-        method: 'POST',
+      const url = editingBizId ? `/users/me/business/${editingBizId}` : '/users/me/business';
+      const method = editingBizId ? 'PUT' : 'POST';
+      const res = await fetch(url, {
+        method: method,
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -229,13 +256,10 @@ export default function ProfilePage() {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || '사업자 등록에 실패했습니다.');
+      if (!res.ok) throw new Error(data.detail || (editingBizId ? '사업자 정보 수정에 실패했습니다.' : '사업자 등록에 실패했습니다.'));
 
-      setBizSuccess('사업자 정보가 성공적으로 등록되었습니다.');
-      setBizNumber('');
-      setBizName('');
-      setStoreName('');
-      setDocUrl('');
+      setBizSuccess(editingBizId ? '사업자 정보가 성공적으로 수정되었습니다.' : '사업자 정보가 성공적으로 등록되었습니다.');
+      cancelEditBiz();
       
       await refreshUser();
       setTimeout(() => setBizSuccess(''), 3000);
@@ -533,23 +557,43 @@ export default function ProfilePage() {
                         </a>
                       )}
                     </div>
-                    <button
-                      onClick={() => handleBizDelete(biz.id)}
-                      disabled={deletingId === biz.id}
-                      className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
-                    >
-                      {deletingId === biz.id ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => startEditBiz(biz)}
+                        className="text-gray-500 hover:text-[#7C3AED] p-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer"
+                        title="사업자 정보 수정"
+                      >
+                        <Pencil size={18} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleBizDelete(biz.id)}
+                        disabled={deletingId === biz.id}
+                        className="text-red-500 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                        title="사업자 정보 삭제"
+                      >
+                        {deletingId === biz.id ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          {/* 신규 사업자 등록 양식 */}
+          {/* 사업자 정보 등록/수정 양식 */}
           <form onSubmit={handleBizSubmit} className="space-y-6 max-w-lg border-t border-gray-100 pt-6">
             <h4 className="font-bold text-gray-800 text-sm flex items-center">
-              <Plus size={18} className="mr-1 text-[#7C3AED]" /> 신규 사업자 정보 추가
+              {editingBizId ? (
+                <>
+                  <Pencil size={18} className="mr-1 text-[#7C3AED]" /> 사업자 정보 수정
+                </>
+              ) : (
+                <>
+                  <Plus size={18} className="mr-1 text-[#7C3AED]" /> 신규 사업자 정보 추가
+                </>
+              )}
             </h4>
 
             {bizError && (
@@ -666,13 +710,24 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={uploadingDoc || deletingId !== null}
-              className="w-full bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold py-3.5 rounded-xl transition-colors flex justify-center items-center cursor-pointer shadow-sm text-base"
-            >
-              사업자 정보 및 매장 추가
-            </button>
+            <div className="flex gap-3">
+              {editingBizId && (
+                <button
+                  type="button"
+                  onClick={cancelEditBiz}
+                  className="flex-1 bg-gray-100 hover:bg-gray-250 text-gray-700 font-bold py-3.5 rounded-xl transition-colors cursor-pointer text-center text-base"
+                >
+                  수정 취소
+                </button>
+              )}
+              <button
+                type="submit"
+                disabled={uploadingDoc || deletingId !== null}
+                className="flex-1 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold py-3.5 rounded-xl transition-colors flex justify-center items-center cursor-pointer shadow-sm text-base"
+              >
+                {editingBizId ? '수정 완료' : '사업자 정보 및 매장 추가'}
+              </button>
+            </div>
           </form>
         </div>
       )}

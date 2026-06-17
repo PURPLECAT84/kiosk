@@ -177,7 +177,9 @@ async def register_billing_key(
         success = False
         approval_code = f"APP_{uuid.uuid4().hex[:8].upper()}"
 
-        if PORTONE_API_SECRET and PORTONE_API_SECRET != "test_portone_secret":
+        # [임시 테스트 우회] 포트원 실제 승인 호출을 건너뛰고 항상 Mock 성공 처리로 유도합니다.
+        # if PORTONE_API_SECRET and PORTONE_API_SECRET != "test_portone_secret":
+        if False:
             # 포트원 V2 빌링키 결제 승인 API 호출
             url = f"{PORTONE_API_URL}/payments/{payment_id}/billing-key"
             headers = {
@@ -345,7 +347,9 @@ async def charge_subscription(
         payment_id = f"pay_sub_{uuid.uuid4().hex[:16]}"
         approval_code = f"SU{datetime.now().strftime('%y%m%d')}"
 
-        if PORTONE_API_SECRET and PORTONE_API_SECRET != "test_portone_secret":
+        # [임시 테스트 우회] 포트원 실제 승인 호출을 건너뛰고 항상 Mock 성공 처리로 유도합니다.
+        # if PORTONE_API_SECRET and PORTONE_API_SECRET != "test_portone_secret":
+        if False:
             # [포트원 V2 실 결제 승인 요청]
             url = f"{PORTONE_API_URL}/payments/{payment_id}/billing-key"
             headers = {

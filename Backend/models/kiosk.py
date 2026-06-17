@@ -22,7 +22,7 @@ class Kiosk(Base):
     model_name: Mapped[str] = mapped_column(String(50), nullable=True) # 모델명
     type: Mapped[str] = mapped_column(String(20), default="Store", nullable=False) # Type (Store / Restaurant)
     status: Mapped[str] = mapped_column(String(20), default="WAITING", nullable=False) # 상태 (OPERATING / WAITING)
-    payment_status: Mapped[str] = mapped_column(String(20), default="NORMAL", nullable=False) # 결제상태 (NORMAL / UNPAID)
+    payment_status: Mapped[str] = mapped_column(String(20), default="UNPAID", nullable=False) # 결제상태 (NORMAL / UNPAID)
     next_payment_date: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True) # 다음결제일
     billing_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True) # 정기결제 빌링키
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()")) # 생성일

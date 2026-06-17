@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useKiosk } from '../context/KioskContext';
-import { Monitor, Plus, Calendar, Loader2, CheckCircle2, ArrowRightCircle, CreditCard } from 'lucide-react';
+import { Monitor, Plus, Calendar, Loader2, CheckCircle2, ArrowRightCircle, CreditCard, ShieldAlert } from 'lucide-react';
 
 interface KioskItem {
   id: string;
@@ -225,6 +225,17 @@ export default function KioskManagement() {
           </button>
         )}
       </div>
+      
+      {/* 결제 대기 경고 배너 */}
+      {kiosks.some(k => k.payment_status === 'UNPAID') && (
+        <div className="bg-red-50 border border-red-200 text-red-800 px-5 py-4 rounded-2xl flex items-center space-x-3 shadow-sm animate-pulse">
+          <ShieldAlert className="text-red-500" size={24} />
+          <div>
+            <p className="font-bold text-sm">결제 필요 안내</p>
+            <p className="text-xs text-red-600 font-medium mt-0.5">키오스크 사용을 위해서는 결제가 필요합니다. 결제 대기 중인 기기의 이용권을 결제해 주세요.</p>
+          </div>
+        </div>
+      )}
 
       {ownerFilter && (
         <div className="bg-[#7C3AED]/5 text-[#7C3AED] px-5 py-3 rounded-2xl flex justify-between items-center text-sm font-semibold border border-[#7C3AED]/10 animate-fade-in">
@@ -333,7 +344,7 @@ export default function KioskManagement() {
                           ? 'bg-blue-50 text-blue-600' 
                           : 'bg-red-50 text-red-600'
                       }`}>
-                        {kiosk.payment_status === 'NORMAL' ? '정상' : '체납(UNPAID)'}
+                        {kiosk.payment_status === 'NORMAL' ? '정상' : '미결제'}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-gray-600">

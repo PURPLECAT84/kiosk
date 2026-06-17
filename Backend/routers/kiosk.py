@@ -60,7 +60,7 @@ async def create_kiosk(
         model_name=kiosk.model_name,
         type=kiosk.type,
         status=kiosk.status,
-        payment_status="NORMAL"
+        payment_status="UNPAID"
     )
     db.add(db_kiosk)
     db.flush() # UUID 생성을 위해 flush
@@ -298,6 +298,13 @@ async def get_kiosk_admins(
     
     response = []
     for admin in admins:
+        # [인턴/주니어 가이드]
+        # 일반 점주(MANAGER)나 매장 관리자(MASTER)가 본사 직원(HEAD)이나 개발자(DEV) 계정을 목록에서 보지 못하도록 가려줍니다.
+        # 이 필터링은 보안성 향상과 전역 운영진 정보 유출 방지를 위한 필수 장치입니다.
+        if current_user.role not in [UserRole.DEV, UserRole.HEAD]:
+            if admin.user and admin.user.role in [UserRole.DEV, UserRole.HEAD]:
+                continue
+                
         response.append(KioskAdminResponse(
             user_id=admin.user_id,
             name=admin.user.name,
@@ -349,6 +356,26 @@ async def add_kiosk_admin(
     target_user = db.execute(user_stmt).scalars().first()
     if not target_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="입력하신 이메일의 사용자를 찾을 수 없습니다.")
+
+    # [인턴/주니어 가이드]
+    # 기기 관리자를 추가할 때, 대상이 되는 유저의 전역 권한 레벨(global level)이 호출자보다 높은 경우를 제한합니다.
+    # 예를 들어 일반 점주(MANAGER)가 시스템 개발자(DEV)나 본사(HEAD) 계정을 임의로 납치해 기기 관리자로 임명하는 불상사를 방지합니다.
+    global_role_levels = {
+        UserRole.DEV: 5,
+        UserRole.HEAD: 4,
+        UserRole.MASTER: 3,
+        UserRole.MANAGER: 2,
+        UserRole.STAFF: 1,
+        UserRole.NONE: 0
+    }
+    caller_global_level = global_role_levels.get(current_user.role, 0)
+    target_global_level = global_role_levels.get(target_user.role, 0)
+    
+    if target_global_level > caller_global_level:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="자신보다 전역 권한이 높은 사용자를 기기 관리자로 추가할 수 없습니다."
+        )
 
     # 4. 이미 해당 기기의 관리자로 등록되어 있는지 검증
     dup_stmt = select(KioskAdmin).where(KioskAdmin.kiosk_id == kiosk_id, KioskAdmin.user_id == target_user.id)
@@ -403,6 +430,26 @@ async def update_kiosk_admin(
     if not target_admin:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="해당 관리자 매핑을 찾을 수 없습니다.")
 
+    # [인턴/주니어 가이드]
+    # 권한을 수정하려는 대상 유저가 본인보다 높은 전역 등급(global level)을 가진 회원이라면 권한 수정을 차단합니다.
+    # 일반 점주가 더 높은 본사/개발자 계정의 기기 관리 등급을 제어할 수 없도록 격리하기 위함입니다.
+    global_role_levels = {
+        UserRole.DEV: 5,
+        UserRole.HEAD: 4,
+        UserRole.MASTER: 3,
+        UserRole.MANAGER: 2,
+        UserRole.STAFF: 1,
+        UserRole.NONE: 0
+    }
+    caller_global_level = global_role_levels.get(current_user.role, 0)
+    target_global_level = global_role_levels.get(target_admin.user.role, 0) if target_admin.user else 0
+
+    if target_global_level > caller_global_level:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="자신보다 전역 권한이 높은 사용자의 기기 관리자 권한을 수정할 수 없습니다."
+        )
+
     # 2. 현재 요청자의 권한 확인
     caller_role = "STAFF"
     if current_user.role in [UserRole.DEV, UserRole.HEAD]:
@@ -455,6 +502,27 @@ async def delete_kiosk_admin(
     target_admin = db.execute(target_stmt).scalars().first()
     if not target_admin:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="해당 관리자 매핑을 찾을 수 없습니다.")
+
+    # [인턴/주니어 가이드]
+    # 기기 관리자 해제 시, 삭제 대상의 전역 권한이 자신보다 높은 경우 해제할 수 없습니다. (단, 본인이 스스로 나가는 경우는 허용)
+    # 일반 점주(MANAGER)가 본사 직원(HEAD)이나 시스템 개발자(DEV) 관리자를 임의로 쫓아내는 비정상 액션을 제어합니다.
+    if current_user.id != user_id:
+        global_role_levels = {
+            UserRole.DEV: 5,
+            UserRole.HEAD: 4,
+            UserRole.MASTER: 3,
+            UserRole.MANAGER: 2,
+            UserRole.STAFF: 1,
+            UserRole.NONE: 0
+        }
+        caller_global_level = global_role_levels.get(current_user.role, 0)
+        target_global_level = global_role_levels.get(target_admin.user.role, 0) if target_admin.user else 0
+
+        if target_global_level > caller_global_level:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="자신보다 전역 권한이 높은 사용자를 기기 관리자에서 해제할 수 없습니다."
+            )
 
     # 2. 현재 요청자의 권한 확인
     caller_role = "STAFF"

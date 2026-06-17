@@ -503,6 +503,25 @@ export default function KioskDetail() {
                   {isSubscribing ? <Loader2 className="animate-spin" size={20} /> : '정기결제 카드 해지 (기기 정지)'}
                 </button>
               </div>
+            ) : (kiosk.payment_status === 'NORMAL' && kiosk.next_payment_date && new Date(kiosk.next_payment_date) > new Date()) ? (
+              <div className="bg-green-50 border border-green-100 rounded-3xl p-6 space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-green-800 font-bold text-base flex items-center">
+                    <span className="w-2.5 h-2.5 rounded-full bg-green-500 mr-2.5 animate-pulse" />
+                    단일 이용권 사용 중 (정상)
+                  </span>
+                  {kiosk.next_payment_date && (
+                    <span className="text-xs text-green-600 font-bold">만료일: {new Date(kiosk.next_payment_date).toLocaleDateString()}</span>
+                  )}
+                </div>
+                <div className="text-sm text-gray-600 space-y-1">
+                  <div>라이선스 형태: <span className="font-bold text-gray-900">단일결제 이용권</span></div>
+                  <div>서비스 만료 예정일: <span className="font-bold text-gray-900">{new Date(kiosk.next_payment_date).toLocaleDateString()}</span></div>
+                </div>
+                <p className="text-xs text-green-600 font-medium">
+                  현재 단일결제권을 사용하여 키오스크 기기가 활성화되어 가동 중입니다. 만료일 이전에 추가로 연장하거나 정기 결제로 전환할 수 있습니다.
+                </p>
+              </div>
             ) : (
               <div className="bg-red-50 border border-red-100 rounded-3xl p-6 space-y-4">
                 <div className="flex justify-between items-center">
